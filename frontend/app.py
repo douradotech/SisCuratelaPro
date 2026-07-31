@@ -20,7 +20,7 @@ if "logado" not in st.session_state:
     })
 
 def login_backend(email, senha):
-    url_api = "http://localhost:8000/auth/login"
+    url_api = "https://siscuratelapro.onrender.com/auth/login"
     try:
         resposta = requests.post(url_api, json={"email": email, "senha": senha}, timeout=5)
         if resposta.status_code == 200:
@@ -36,7 +36,7 @@ def login_backend(email, senha):
         return False, "Erro Crítico: Backend desligado.", None, None
 
 def enviar_lancamento(dados_transacao, token):
-    url_api = "http://localhost:8000/transacoes/novo"
+    url_api = "https://siscuratelapro.onrender.com/transacoes/novo"
     headers = {"Authorization": f"Bearer {token}"}
     try:
         resposta = requests.post(url_api, json=dados_transacao, headers=headers)
@@ -129,7 +129,7 @@ else:
                     with st.spinner("Analisando metadados e estruturando dados financeiros..."):
                         headers = {"Authorization": f"Bearer {st.session_state['token']}"}
                         files = {"file": (getattr(arquivo_capturado, 'name', 'foto_camera.jpg'), arquivo_capturado.getvalue(), getattr(arquivo_capturado, 'type', 'image/jpeg'))}
-                        resp_ocr = requests.post("http://localhost:8000/transacoes/extrair-ia", files=files, headers=headers)
+                        resp_ocr = requests.post("https://siscuratelapro.onrender.com/transacoes/extrair-ia", files=files, headers=headers)
                         
                         if resp_ocr.status_code == 200:
                             res_json = resp_ocr.json()
@@ -303,7 +303,7 @@ else:
                     
                     files = {"file": (nome_arq, bytes_arq, tipo_arq)}
                     headers = {"Authorization": f"Bearer {st.session_state['token']}"}
-                    resp_upload = requests.post(f"http://localhost:8000/transacoes/{id_gerado}/anexar", files=files, headers=headers)
+                    resp_upload = requests.post(f"https://siscuratelapro.onrender.com/transacoes/{id_gerado}/anexar", files=files, headers=headers)
                     if resp_upload.status_code == 200:
                         st.session_state["msg_sucesso"] = "✅ Lançamento gravado e Comprovante fotográfico/digital anexado com sucesso!"
                     else:
@@ -327,7 +327,7 @@ else:
 
         try:
             headers = {"Authorization": f"Bearer {st.session_state['token']}"}
-            resposta = requests.get("http://localhost:8000/transacoes/listar", headers=headers, timeout=5)
+            resposta = requests.get("https://siscuratelapro.onrender.com/transacoes/listar", headers=headers, timeout=5)
             
             if resposta.status_code == 200:
                 lista_transacoes = resposta.json()
@@ -439,7 +439,7 @@ else:
                                 transacao_selecionada = st.selectbox("Selecione o comprovante filtrado:", list(opcoes_comprovantes.keys()))
                                 id_selec = opcoes_comprovantes[transacao_selecionada]
                                 
-                                resp_file = requests.get(f"http://localhost:8000/transacoes/{id_selec}/comprovante", headers=headers)
+                                resp_file = requests.get(f"https://siscuratelapro.onrender.com/transacoes/{id_selec}/comprovante", headers=headers)
                                 
                                 if resp_file.status_code == 200:
                                     caminho_orig = df_com_comprovante.loc[df_com_comprovante['id_transacao'] == id_selec, 'comprovante_path'].values[0]
