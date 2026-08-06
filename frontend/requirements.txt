@@ -1,2 +1,4 @@
 streamlit
 requests
+starlette==0.37.2
+fastapi==0.110.0
