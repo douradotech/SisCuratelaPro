@@ -15,11 +15,10 @@ class TransacaoModel(Base):
     descricao = Column(String)
     documento_referencia = Column(String, nullable=True)
     exige_alvara = Column(Boolean, default=False)
-    comprovante_path = Column(String, nullable=True)  # <-- NOVO CAMPO PARA O COMPROVANTE
+    comprovante_path = Column(String, nullable=True)
     criado_em = Column(DateTime, server_default=func.now())
     atualizado_em = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
-# NOVO MODELO DE AUDITORIA PERSISTENTE
 class AuditoriaModel(Base):
     __tablename__ = "logs_auditoria"
 
@@ -28,3 +27,14 @@ class AuditoriaModel(Base):
     email = Column(String, nullable=False)
     acao = Column(String, nullable=False)
     status = Column(String, nullable=False)
+
+class UsuarioModel(Base):
+    __tablename__ = "usuarios"
+
+    id_usuario = Column(String, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False)
+    senha_hash = Column(String, nullable=False)
+    perfil = Column(String, nullable=False)
+    tentativas_falhas = Column(Integer, default=0)
+    ativo = Column(Boolean, default=True)
