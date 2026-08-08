@@ -23,9 +23,9 @@ if "logado" not in st.session_state:
     })
 
 def login_backend(email, senha):
-    url_api = "http://127.0.0.1:8000/auth/login"
+    url_api = "https://siscuratelapro.onrender.com/auth/login"
     try:
-        resposta = requests.post(url_api, json={"email": email, "senha": senha}, timeout=15)
+        resposta = requests.post(url_api, json={"email": email, "senha": senha}, timeout=30)
         if resposta.status_code == 200:
             dados = resposta.json()
             return True, dados["nome"], dados["perfil"], dados["access_token"]
@@ -34,9 +34,9 @@ def login_backend(email, senha):
         else:
             return False, f"Erro no servidor: {resposta.text}", None, None
     except requests.exceptions.Timeout:
-        return False, "O Servidor demorou muito para responder (Erro de Timeout). Verifique a conexão com o Banco de Dados.", None, None
+        return False, "O servidor demorou para responder (Timeout). Tente novamente.", None, None
     except requests.exceptions.ConnectionError:
-        return False, "Erro Crítico: O Backend (FastAPI) parece estar desligado.", None, None
+        return False, "Erro Crítico: Backend desligado.", None, None
 
 def enviar_lancamento(dados_transacao, token):
     url_api = "http://127.0.0.1:8000/transacoes/novo"
