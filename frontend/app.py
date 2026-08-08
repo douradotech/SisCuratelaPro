@@ -272,12 +272,10 @@ else:
                 "Outros Pagamentos": "micro-outros-pagamentos"
             }
             nome_categoria_selecionada = st.selectbox("Categoria da Despesa (Rubrica Oficial MPDFT)", list(categorias_oficiais.keys()))
-            id_micro = categorias_oficiais[nome_categoria_selecionada]
+            id_micro = categorias_oficiais[nome_categoria_selecionada]arquivo_para_anexar = comprovante
             
             desc_inicial = st.session_state.get("ocr_desc", "")
             descricao = st.text_area("Descrição Detalhada do Gasto (Proibido termos genéricos como 'diversos')", value=desc_inicial)
-            
-            comprovante_file = st.file_uploader("Anexar Comprovante Fiscal Definitivo (Opcional)", type=["pdf", "png", "jpg", "jpeg"])
             
             submit_transacao = st.form_submit_button("Validar e Salvar Lançamento")
 
@@ -318,7 +316,7 @@ else:
 
             sucesso_transacao, msg, id_gerado = enviar_lancamento(payload, st.session_state["token"])
             if sucesso_transacao:
-                arquivo_para_anexar = comprovante_file if comprovante_file is not None else arquivo_capturado
+                arquivo_para_anexar = arquivo_capturado
                 
                 if arquivo_para_anexar is not None:
                     nome_arq = getattr(arquivo_para_anexar, 'name', 'foto_camera.jpg')
