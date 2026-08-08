@@ -39,10 +39,10 @@ def login_backend(email, senha):
         return False, "Erro Crítico: Backend desligado.", None, None
 
 def enviar_lancamento(dados_transacao, token):
-    url_api = "http://127.0.0.1:8000/transacoes/novo"
+    url_api = "https://siscuratelapro.onrender.com/transacoes/novo"
     headers = {"Authorization": f"Bearer {token}"}
     try:
-        resposta = requests.post(url_api, json=dados_transacao, headers=headers, timeout=30)
+        resposta = requests.post(url_api, json=dados_transacao, headers=headers)
         if resposta.status_code == 200:
             resultado = resposta.json()
             return True, resultado.get("mensagem", "Sucesso"), resultado.get("id_transacao")
