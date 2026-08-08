@@ -97,38 +97,38 @@ else:
         with st.expander("Assistente de Captura e Leitura IA", expanded=True):
             arquivo_capturado = st.file_uploader("Selecione o documento fiscal", type=["pdf", "png", "jpg", "jpeg"])
             if arquivo_capturado is not None:
-                if st.button("Processar Documento com IA"):
-                    # Agora ele verifica direto a variável da tela, sem usar session_state
-                    if arquivo_capturado is not None:
-                        with st.spinner("Analisando documento e estruturando dados..."):
-                            try:
-                                # Extrai o nome e os bytes do arquivo diretamente do componente
-                                files = {'file': (arquivo_capturado.name, arquivo_capturado.getvalue(), getattr(arquivo_capturado, 'type', 'image/jpeg'))}
-                                headers = {'Authorization': f"Bearer {st.session_state.get('token')}"}
+                if st.button("🚀 Processar Documento com IA"):
+                    with st.spinner("Analisando metadados e estruturando dados financeiros com IA..."):
+                        try:
+                            headers = {"Authorization": f"Bearer {st.session_state['token']}"}
+                            files = {"file": (getattr(arquivo_capturado, 'name', 'foto_camera.jpg'), arquivo_capturado.getvalue(), getattr(arquivo_capturado, 'type', 'image/jpeg'))}
+                            
+                            # Adicionado timeout de 60 segundos para dar tempo ao Render e à IA processarem
+                            resp_ocr = requests.post("https://siscuratelapro.onrender.com/transacoes/extrair-ia", files=files, headers=headers, timeout=60)
+                            
+                            if resp_ocr.status_code == 200:
+                                res_json = resp_ocr.json()
                                 
-                                resp_ocr = requests.post("https://siscuratelapro.onrender.com/transacoes/extrair-ia", files=files, headers=headers)
+                                # Salva os dados nas variáveis oficiais do sistema atual
+                                st.session_state["ocr_valor"] = res_json.get("valor_sugerido", "")
+                                st.session_state["ocr_desc"] = res_json.get("descricao_sugerida", "")
+                                st.session_state["ocr_ref"] = res_json.get("documento_referencia_sugerido", "")
+                                st.session_state["ocr_estab"] = res_json.get("estabelecimento_identificado", "")
                                 
-                                if resp_ocr.status_code == 200:
-                                    res_json = resp_ocr.json()
-                                    
-                                    # Salva os dados nas variáveis oficiais do sistema atual
-                                    st.session_state["ocr_valor"] = res_json.get("valor_sugerido", "")
-                                    st.session_state["ocr_desc"] = res_json.get("descricao_sugerida", "")
-                                    st.session_state["ocr_ref"] = res_json.get("documento_referencia_sugerido", "")
-                                    st.session_state["ocr_estab"] = res_json.get("estabelecimento_identificado", "")
-                                    
-                                    # CORREÇÃO TÁTICA: Força o Streamlit a preencher a chave visual do valor
-                                    counter = st.session_state.get("form_counter", 0)
-                                    st.session_state[f"valor_dinamico_{counter}"] = res_json.get("valor_sugerido", "")
-                                    
-                                    st.success(f"✨ Sucesso! Estabelecimento: **{st.session_state['ocr_estab']}** | Valor Sugerido: **R$ {st.session_state['ocr_valor']}**")
-                                    st.rerun()
-                                else:
-                                    st.error(f"Erro no servidor: {resp_ocr.status_code}")
-                            except Exception as e:
-                                st.error(f"Falha de comunicação: {str(e)}")
-                    else:
-                        st.warning("Nenhum documento selecionado para processamento.")
+                                # CORREÇÃO TÁTICA: Força o Streamlit a preencher a chave visual do valor
+                                counter = st.session_state.get("form_counter", 0)
+                                st.session_state[f"valor_dinamico_{counter}"] = res_json.get("valor_sugerido", "")
+                                
+                                st.success(f"✨ Sucesso! Estabelecimento: **{st.session_state['ocr_estab']}** | Valor Sugerido: **R$ {st.session_state['ocr_valor']}**")
+                                st.rerun()
+                            else:
+                                # Mostra o erro exato retornado pelo Backend para diagnósticos precisos
+                                st.error(f"Falha na IA (Status {resp_ocr.status_code}): {resp_ocr.text}")
+                                
+                        except requests.exceptions.Timeout:
+                            st.error("O servidor demorou muito para responder. O Render pode estar acordando; tente clicar em processar novamente.")
+                        except Exception as e:
+                            st.error(f"Falha crítica de comunicação com a IA: {str(e)}")
                             
         with st.form("form_transacao"):
             id_conta = st.selectbox("Conta Bancária", ["conta-bb-corrente"])
