@@ -96,39 +96,57 @@ else:
             
         with st.expander("Assistente de Captura e Leitura IA", expanded=True):
             arquivo_capturado = st.file_uploader("Selecione o documento fiscal", type=["pdf", "png", "jpg", "jpeg"])
+            # --- SEÇÃO DE CAPTURA INTELIGENTE (UPLOAD OU CÂMERA DO CELULAR) ---
+        with st.expander("🤖 Assistente de Captura e Leitura IA (Upload ou Câmera)", expanded=True):
+            tipo_entrada = st.radio(
+                "Selecione o método de captura do documento:",
+                ["📂 Enviar Arquivo (PDF, PNG, JPG)", "📸 Usar Câmera do Celular / Webcam"],
+                horizontal=True,
+                key="tipo_entrada_ocr"
+            )
+            
+            arquivo_capturado = None
+            
+            if tipo_entrada == "📂 Enviar Arquivo (PDF, PNG, JPG)":
+                arquivo_capturado = st.file_uploader("Selecione o documento fiscal", type=["pdf", "png", "jpg", "jpeg"], key="uploader_ia_novo")
+            else:
+                st.markdown("Posicione o documento em frente à câmera do seu dispositivo e clique em tirar foto:")
+                arquivo_capturado = st.camera_input("Tirar Foto do Comprovante", key="camera_ia_novo")
+            
+            # O botão de processamento agora fica visível sempre que um arquivo estiver carregado
             if arquivo_capturado is not None:
-                if st.button("🚀 Processar Documento com IA"):
+                st.info(audit_msg := "📄 Documento pronto para análise inteligente.")
+                
+                if st.button("🚀 Processar Documento com IA", type="primary", key="btn_executar_ia"):
                     with st.spinner("Analisando metadados e estruturando dados financeiros com IA..."):
                         try:
-                            headers = {"Authorization": f"Bearer {st.session_state['token']}"}
+                            headers = {"Authorization": f"Bearer {st.session_state.get('token', '')}"}
                             files = {"file": (getattr(arquivo_capturado, 'name', 'foto_camera.jpg'), arquivo_capturado.getvalue(), getattr(arquivo_capturado, 'type', 'image/jpeg'))}
                             
-                            # Adicionado timeout de 60 segundos para dar tempo ao Render e à IA processarem
                             resp_ocr = requests.post("https://siscuratelapro.onrender.com/transacoes/extrair-ia", files=files, headers=headers, timeout=60)
                             
                             if resp_ocr.status_code == 200:
                                 res_json = resp_ocr.json()
                                 
-                                # Salva os dados nas variáveis oficiais do sistema atual
                                 st.session_state["ocr_valor"] = res_json.get("valor_sugerido", "")
                                 st.session_state["ocr_desc"] = res_json.get("descricao_sugerida", "")
                                 st.session_state["ocr_ref"] = res_json.get("documento_referencia_sugerido", "")
                                 st.session_state["ocr_estab"] = res_json.get("estabelecimento_identificado", "")
                                 
-                                # CORREÇÃO TÁTICA: Força o Streamlit a preencher a chave visual do valor
                                 counter = st.session_state.get("form_counter", 0)
                                 st.session_state[f"valor_dinamico_{counter}"] = res_json.get("valor_sugerido", "")
                                 
                                 st.success(f"✨ Sucesso! Estabelecimento: **{st.session_state['ocr_estab']}** | Valor Sugerido: **R$ {st.session_state['ocr_valor']}**")
                                 st.rerun()
                             else:
-                                # Mostra o erro exato retornado pelo Backend para diagnósticos precisos
                                 st.error(f"Falha na IA (Status {resp_ocr.status_code}): {resp_ocr.text}")
                                 
                         except requests.exceptions.Timeout:
                             st.error("O servidor demorou muito para responder. O Render pode estar acordando; tente clicar em processar novamente.")
                         except Exception as e:
                             st.error(f"Falha crítica de comunicação com a IA: {str(e)}")
+            else:
+                st.warning("⚠️ Selecione um arquivo ou tire uma foto para habilitar o processamento por IA.")
                             
         with st.form("form_transacao"):
             id_conta = st.selectbox("Conta Bancária", ["conta-bb-corrente"])
