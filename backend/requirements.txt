@@ -6,3 +6,4 @@ pydantic
 bcrypt
 pyjwt
 python-multipart
+google-generativeai
