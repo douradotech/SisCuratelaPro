@@ -1,4 +1,3 @@
-# frontend/app.py
 import streamlit as st
 import requests
 import datetime
@@ -131,8 +130,8 @@ else:
                 arquivo_capturado = st.camera_input("Tirar Foto do Comprovante", key="camera_ia_novo")
             
             st.write("") # Espaçamento
-            
             if st.button("🚀 Processar Documento com IA", type="primary", key="btn_executar_ia"):
+                
                 if arquivo_capturado is None:
                     st.warning("⚠️ Atenção: Selecione um arquivo ou tire uma foto ANTES de clicar em processar.")
                 else:
@@ -183,7 +182,95 @@ else:
                     "Conta Poupança (Banco do Brasil)": "conta-bb-poupanca",
                     "Conta Benefício (INSS)": "conta-inss-beneficio"
                 }
-                nome_categoria_selecionada = st.selectbox("Categoria da Despesa (Rubrica Oficial MPDFT)", list(categorias_oficiais.keys()))
+                nome_conta_selecionada = st.selectbox("Conta Bancária de Origem", list(contas_oficiais.keys()))
+                id_conta = contas_oficiais[nome_conta_selecionada]
+                
+                val_inicial = st.session_state.get("ocr_valor", "")
+                valor_digitado = st.text_input("Valor (R$)", value=val_inicial, placeholder="0,00", key=f"valor_dinamico_{st.session_state['form_counter']}")
+            
+            with col_b:
+                data_transacao = st.date_input("Data da Transação", value=datetime.date.today())
+                doc_inicial = st.session_state.get("ocr_ref", "")
+                documento_ref = st.text_input("Documento de Referência (Nº Nota Fiscal / Recibo)", value=doc_inicial)
+            
+            categorias_oficiais = {
+                "Acompanhante": "micro-acompanhante",
+                "Água": "micro-agua",
+                "Alimentação": "micro-alimentacao",
+                "Aluguel": "micro-aluguel",
+                "Bancárias": "micro-bancarias",
+                "Brinquedos": "micro-brinquedos",
+                "Calçados": "micro-calcados",
+                "Cama / Banho": "micro-cama-banho",
+                "Cartoriais": "micro-cartoriais",
+                "Casa Geriátrica": "micro-casa-geriatrica",
+                "Cigarros": "micro-cigarros",
+                "Combustíveis": "micro-combustiveis",
+                "Condomínio": "micro-condominio",
+                "Contador": "micro-contador",
+                "Dentista": "micro-dentista",
+                "Despesas Financeiras": "micro-despesas-financeiras",
+                "Educação": "micro-educacao",
+                "Eletrodomésticos": "micro-eletrodomesticos",
+                "Eletrônicos": "micro-eletronicos",
+                "Empréstimo Pago": "micro-emprestimo-pago",
+                "Energia Elétrica": "micro-energia-eletrica",
+                "Enfermagem": "micro-enfermagem",
+                "Estacionamento": "micro-estacionamento",
+                "Estética": "micro-estetica",
+                "Exames": "micro-exames",
+                "Farmácia": "micro-farmacia",
+                "Fisioterapeuta": "micro-fisioterapeuta",
+                "Fonoaudiólogo": "micro-fonoaudiologo",
+                "Fraldas": "micro-fraldas",
+                "Gás": "micro-gas",
+                "Gastos Funerários": "micro-gastos-funerarios",
+                "Higiene Pessoal": "micro-higiene-pessoal",
+                "Honorários": "micro-honorarios",
+                "Hospital": "micro-hospital",
+                "Imóveis": "micro-imoveis",
+                "Impostos / Taxas": "micro-impostos-taxas",
+                "Informática": "micro-informatica",
+                "Internet": "micro-internet",
+                "Jornais / Revistas": "micro-jornais-revistas",
+                "Judiciais": "micro-judiciais",
+                "Lanches": "micro-lanches",
+                "Lavanderia": "micro-lavanderia",
+                "Lazer": "micro-lazer",
+                "Limpeza": "micro-limpeza",
+                "Livros": "micro-livros",
+                "Manutenção": "micro-manutencao",
+                "Material Escolar": "micro-material-escolar",
+                "Medicamentos": "micro-medicamentos",
+                "Médico": "micro-medico",
+                "Mensalidades": "micro-mensalidades",
+                "Móveis": "micro-moveis",
+                "Nutricionista": "micro-nutricionista",
+                "Obrigações Patronais": "micro-obrigacoes-patronais",
+                "Papelaria": "micro-papelaria",
+                "Perfumaria": "micro-perfumaria",
+                "Plano de Saúde": "micro-plano-saude",
+                "Produtos Hospitalares": "micro-produtos-hospitalares",
+                "Psicólogo": "micro-psicologo",
+                "Psiquiatra": "micro-psiquiatra",
+                "Refeições": "micro-refeicoes",
+                "Reformas": "micro-reformas",
+                "Seguros": "micro-seguros",
+                "Serviços de Terceiros": "micro-servicos-terceiros",
+                "Serviços Domésticos": "micro-servicos-domesticos",
+                "Supermercado": "micro-supermercado",
+                "Táxi": "micro-taxi",
+                "Telefonia": "micro-telefonia",
+                "Terapeuta Ocupacional": "micro-terapeuta-ocupacional",
+                "Transporte": "micro-transporte",
+                "TV": "micro-tv",
+                "Utensílios": "micro-utensilios",
+                "Vale-Transporte": "micro-vale-transporte",
+                "Vestuário": "micro-vestuario",
+                "Veterinário / Pet Shop": "micro-veterinario-pet-shop",
+                "Outros Pagamentos": "micro-outros-pagamentos"
+            }
+            nome_categoria_selecionada = st.selectbox("Categoria da Despesa (Rubrica Oficial MPDFT)", list(categorias_oficiais.keys()))
             id_micro = categorias_oficiais[nome_categoria_selecionada]
             
             desc_inicial = st.session_state.get("ocr_desc", "")
@@ -242,7 +329,7 @@ else:
                     if resp_upload.status_code == 200:
                         st.session_state["msg_sucesso"] = "✅ Lançamento gravado e Comprovante anexado com sucesso!"
                     else:
-                        st.session_state["msg_sucesso"] = f"⚠️ Lançamento gravado, mas falha ao enviar comprovante físico."
+                        st.session_state["msg_sucesso"] = "⚠️ Lançamento gravado, mas falha ao enviar comprovante físico."
                 else:
                     st.session_state["msg_sucesso"] = f"✅ {msg}"
                 
