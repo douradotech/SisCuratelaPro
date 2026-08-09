@@ -179,8 +179,8 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
     import json
     import google.generativeai as genai
     
-    CHAVE_API = os.getenv("GEMINI_API_KEY", "CHAVE_SEGURA_NO_RENDER")
-    genai.configure(api_key=CHAVE_API)
+    # FORÇA TOTAL DE AUTENTICAÇÃO: Injeta a chave diretamente no ambiente do sistema operacional
+    genai.configure(api_key="AQ.Ab8RN6KSnBtt8QyaD8oDU77KDA0TAwql9Qm6ZgsJP7pXZgItmg")
     
     try:
         conteudo_bytes = file.file.read()
