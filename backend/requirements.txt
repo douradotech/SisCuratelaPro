@@ -6,4 +6,7 @@ pydantic
 bcrypt
 pyjwt
 python-multipart
+streamlit
+requests
+pandas
 google-genai
