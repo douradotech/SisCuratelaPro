@@ -180,7 +180,7 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
     import google.generativeai as genai
     
     # FORÇA TOTAL DE AUTENTICAÇÃO: Injeta a chave diretamente no ambiente do sistema operacional
-    genai.configure(api_key="AQ.Ab8RN6KSnBtt8QyaD8oDU77KDA0TAwql9Qm6ZgsJP7pXZgItmg", transport="rest")
+    genai.configure(api_key="AQ.Ab8RN6KSnBtt8QyaD8oDU77KDA0TAwql9Qm6ZgsJP7pXZgItmg")
     
     try:
         conteudo_bytes = file.file.read()
