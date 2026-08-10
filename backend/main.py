@@ -177,8 +177,9 @@ def anexar_comprovante(id_transacao: str, file: UploadFile = File(...), db: Sess
 def extrair_dados_documento_ia(file: UploadFile = File(...)):
     import json
     from google import genai 
+    from google.genai import types # NOVA IMPORTAÇÃO OBRIGATÓRIA
     
-    # O novo SDK aceita AQ... nativamente e resolve a autenticação internamente
+    # Autenticação nativa resolvida
     client = genai.Client(api_key="AQ.Ab8RN6IrdbDHN_JmQ1gRiBiLijZAke_xSGeAAa_p9fOPV_GMuA")
     
     try:
@@ -200,15 +201,15 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
         }
         """
         
+        # O novo padrão rigoroso para envio de imagens
+        imagem_part = types.Part.from_bytes(
+            data=conteudo_bytes,
+            mime_type=mime_type
+        )
+        
         response = client.models.generate_content(
             model='gemini-1.5-flash',
-            contents=[
-                prompt,
-                {
-                    "mime_type": mime_type,
-                    "data": conteudo_bytes
-                }
-            ]
+            contents=[prompt, imagem_part]
         )
         
         texto_limpo = response.text.strip()
