@@ -179,10 +179,11 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
     from google import genai 
     from google.genai import types
     
-    # O SDK novo busca a chave diretamente da variável de ambiente GEMINI_API_KEY
-    client = genai.Client()
-    
     try:
+        # Inicialização DENTRO do bloco try usando a chave oficial do seu bloco de notas
+        chave_oficial = "AQ.Ab8RN6KSnBtt8QyaD8oDU77KDA0TAwql9Qm6ZgsJP7pXZgItmg"
+        client = genai.Client(api_key=chave_oficial)
+        
         conteudo_bytes = file.file.read()
         mime_type = file.content_type if file.content_type else "image/jpeg"
         
