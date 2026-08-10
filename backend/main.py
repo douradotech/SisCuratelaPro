@@ -179,10 +179,9 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
     from google import genai 
     from google.genai import types
     
-    try:
-        # Inicialização DENTRO do bloco try usando a chave oficial do seu bloco de notas
-        chave_oficial = "AQ.Ab8RN6KSnBtt8QyaD8oDU77KDA0TAwql9Qm6ZgsJP7pXZgItmg"
-        client = genai.Client(api_key=chave_oficial)
+   try:
+        # O sistema agora vai puxar a chave com segurança lá do cofre do Render
+        client = genai.Client()
         
         conteudo_bytes = file.file.read()
         mime_type = file.content_type if file.content_type else "image/jpeg"

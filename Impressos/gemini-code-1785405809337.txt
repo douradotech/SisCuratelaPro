@@ -1,0 +1,6 @@
+/Projeto_SisCuratela_Pro/
+│
+├── backend/                  # Motor Lógico (FastAPI)
+├── frontend/                 # Interface Visual (Streamlit)
+└── infra/                    # Infraestrutura e Banco de Dados
+    └── schema_siscuratela.sql  <-- (O seu arquivo fica aqui)

@@ -1,0 +1,95 @@
+### Resumo executivo
+Você tem um **PoC funcional** (Streamlit frontend + FastAPI backend + PostgreSQL) que captura a lógica de negócio e as regras MPDFT, mas o artefato atual **não está pronto para produção**. Os pontos críticos são **segurança de autenticação**, **persistência e audit trail confiável**, **validação documental robusta**, **fluxo de uploads seguro** e **arquitetura modular para mobile/cloud**. Abaixo segue um plano técnico e operacional, priorizado e pronto para execução, com correções concretas e entregáveis imediatos.
+
+---
+
+### Principais problemas identificados (resumo)
+- **Autenticação insegura**: senhas hardcoded, tokens não assinados/sem revogação, ausência de MFA/SSO.  
+- **Audit trail frágil**: logs por `print()`; não há gravação imutável em banco nem exportação auditável.  
+- **Modelos e DB com inconsistências**: `__tablename__` ausente/errado, `DATABASE_URL` mal formatada, tipos imprecisos (Float vs Numeric).  
+- **Validações críticas no frontend**: regras de compliance (descrições genéricas, exigência de comprovante) precisam rodar server‑side.  
+- **Uploads e OCR frágeis**: aceitação direta de arquivos sem MIME check, hash, virus-scan, presigned URLs ou criptografia.  
+- **Robustez e observability**: tracebacks, 500s, falta de migrations (Alembic), sem CI/CD, sem testes automatizados.  
+- **Arquitetura monolítica no frontend**: Streamlit executa lógica sensível; isso deve ser apenas UI.
+
+---
+
+### Roadmap priorizado (curto → médio prazo)
+
+| **Prioridade** | **Objetivo** | **Entregável mínimo** | **Prazo sugerido** |
+|---|---|---:|---:|
+| **Crítico** | Autenticação segura e audit trail | FastAPI: login com bcrypt, JWT assinado, logs persistentes em `logs_acesso` | 3–7 dias |
+| **Alto** | Upload seguro e validação documental | Presigned URL; virus-scan; OCR assíncrono; armazenar hash e metadados | 1–2 semanas |
+| **Alto** | Validações server-side de compliance | Regras Pydantic + validações DB (CHECKs) + exigir comprovante acima de limiar | 1–2 semanas |
+| **Médio** | DB e migrations | Corrigir modelos SQLAlchemy; Numeric(15,2); Alembic migrations | 1 semana |
+| **Médio** | Observability e infra | Logs estruturados para SIEM; backups; KMS para chaves | 2–3 semanas |
+| **Médio/Longo** | Hardening e SSO/MFA | OIDC (Azure AD / Google), MFA, sessão server-side (Redis) | 3–6 semanas |
+
+---
+
+### Correções técnicas detalhadas (o que implementar agora, com exemplos)
+#### 1) Autenticação e sessão (crítico)
+- **Substituir senhas em texto** por registros em `usuarios` com `senha_hash` (bcrypt/argon2).  
+- **JWT**: usar `PyJWT` com `SECRET_KEY` guardada em KMS/KeyVault; incluir `sub` (id_usuario), `perfil`, `iat`, `exp`.  
+- **Revogação**: manter `refresh_tokens` e sessão server-side em Redis para revogação.  
+- **MFA/SSO**: planejar OIDC (Azure AD ou Google) para produção; usar SSO corporativo quando disponível.
+
+**Exemplo (esquema):**
+```python
+# criar_token_jwt(payload)
+exp = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+payload.update({"exp": exp, "iat": datetime.utcnow()})
+token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+```
+
+#### 2) Persistência e audit trail (crítico)
+- **Tabela `logs_acesso`** e `audit_trail` append-only; gravar em transação com `db.add()` e `commit()`.  
+- **Não usar print()** para auditoria; enviar logs estruturados (JSON) para SIEM e também persistir no Postgres.  
+- **Exportabilidade**: endpoint para extrair trilha em formato CSV/JSON assinado para auditoria judicial.
+
+#### 3) Uploads e processamento documental (alto)
+- **Fluxo presigned URL**:
+  - Frontend solicita `POST /documents/presign` → backend valida usuário e retorna URL temporário S3/GCS.
+  - Frontend faz `PUT` direto para storage; backend recebe confirmação e enfileira OCR/scan.
+- **Checks**: MIME type, extensão, tamanho, SHA‑256, ClamAV scan, OCR (Tesseract ou serviço controlado).  
+- **Armazenamento**: server-side encryption; guardar `url_storage`, `hash`, `ocr_processado` no Postgres.
+
+#### 4) Validações de compliance (alto)
+- **Server-side Pydantic validators** (já parcialmente implementados) + regras DB (CHECKs).  
+- **Lista proibida**: manter em tabela `termos_proibidos` e usar tanto regex quanto modelo simples de classificação (opcional) para detectar descrições genéricas.  
+- **Regras de anexos**: exigir comprovante para `valor >= LIMIAR` (configurável) e para categorias sensíveis; bloquear operações que exigem alvará até anexar documento judicial.
+
+#### 5) Modelos e migrations (médio)
+- Corrigir `models.py`:
+  - usar `__tablename__ = "transacoes"`.
+  - `valor = Column(Numeric(15,2), nullable=False)`.
+  - `id_transacao = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)`.
+- Adotar **Alembic** para migrations e versionamento do schema.
+
+#### 6) Observability, testes e DevOps (médio)
+- **Logs estruturados** (JSON) para ELK/Cloud Logging; métricas em Prometheus/Grafana.  
+- **CI/CD**: pipeline que roda lint, tests, security scans (bandit), e deploy em containers (Docker + Kubernetes / managed service).  
+- **Backups e DR**: backups diários do Postgres, testes de restore.
+
+---
+
+### Arquitetura recomendada para acesso móvel e nuvem
+- **Frontend**: Streamlit como UI para desktop; para mobile, oferecer **Progressive Web App (PWA)** ou uma camada web responsiva; alternativa: React + design responsivo se precisar de maior controle mobile.  
+- **API**: FastAPI (containerizado) com endpoints REST/JSON; autenticação via JWT/OIDC.  
+- **Storage**: S3/GCS com presigned URLs; KMS para chaves.  
+- **DB**: Postgres gerenciado (RDS / Cloud SQL / Supabase) com VPC e regras de rede.  
+- **Workers**: Celery/RQ + Redis ou Cloud Tasks para OCR, virus-scan, vetorização.  
+- **Vector DB** (opcional): Weaviate/Milvus/Pinecone para busca semântica de comprovantes.  
+- **Network**: Private Link / VPC peering para isolar tráfego entre serviços.  
+- **Residência de dados**: escolher região Brasil (sa-east1 / Brazil South / Azure Brazil) conforme exigência legal.
+
+---
+
+### Entregáveis práticos que eu posso preparar agora (escolha um ou mais)
+1. **Patch FastAPI (prioridade crítica)**: endpoint `/auth/login` com bcrypt + JWT, persistência de `logs_acesso`, e dependência `get_db` corrigida.  
+2. **Fluxo presigned URL**: backend endpoints `POST /documents/presign` e `POST /documents/confirm`, com exemplo de uso no Streamlit.  
+3. **Alembic migrations**: scripts para criar tabelas `usuarios`, `transacoes`, `comprovantes`, `logs_auditoria`.  
+4. **Checklist de PoC e testes**: casos de teste para compliance (descrições genéricas, anexos obrigatórios, upload malicioso), métricas a coletar e roteiro de validação.  
+5. **Plano de deploy seguro**: Dockerfiles, Kubernetes manifests (ou instruções para Render/Heroku/Azure App Service), e política de segredos (KMS/KeyVault).
+
+Diga qual entregável prefere primeiro e eu gero o artefato pronto para integrar ao seu repositório (código, SQL ou checklist). Vou priorizar **patch de autenticação + audit trail** se você quiser começar pela correção mais crítica.

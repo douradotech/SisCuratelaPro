@@ -1,0 +1,26 @@
+-- 1. Inserir os Usuários (Necessário pois a transação é vinculada ao UUID do curador que operou o sistema)
+INSERT INTO usuarios (id_usuario, nome, email, perfil) 
+VALUES 
+('uuid-allan-001', 'Allan Dourado', 'allan@siscuratela.com.br', 'CURADOR_ADMIN'),
+('uuid-itamar-002', 'Itamar Pereira', 'itamar@siscuratela.com.br', 'CURADOR_ADMIN')
+ON CONFLICT (id_usuario) DO NOTHING;
+
+-- 2. Cadastrar a Conta Bancária Oficial da Curatela
+INSERT INTO contas_bancarias (id_conta, banco, agencia, numero_conta, tipo_conta) 
+VALUES 
+('conta-bb-principal', 'Banco do Brasil', '1234-5', '98765-4', 'CORRENTE')
+ON CONFLICT (id_conta) DO NOTHING;
+
+-- 3. Cadastrar as Categorias Macro (Grupos de despesas exigidos pelo MPDFT)
+INSERT INTO categorias_macro (id_macro, nome, descricao)
+VALUES 
+('macro-saude', 'Saúde e Cuidados', 'Despesas relacionadas a tratamentos, farmácia e cuidadores'),
+('macro-alimentacao', 'Alimentação', 'Despesas com supermercado, hortifruti e afins')
+ON CONFLICT (id_macro) DO NOTHING;
+
+-- 4. Cadastrar as Categorias Micro (O detalhamento exato do lançamento)
+INSERT INTO categorias_micro (id_micro, id_macro, nome)
+VALUES 
+('micro-farmacia', 'macro-saude', 'Farmácia e Medicamentos'),
+('micro-supermercado', 'macro-alimentacao', 'Supermercado')
+ON CONFLICT (id_micro) DO NOTHING;
