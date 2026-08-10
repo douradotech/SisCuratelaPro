@@ -179,7 +179,6 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
     import base64
     import requests
     
-    # Token AQ. fornecido pelo seu ambiente corporativo/Google Cloud
     token_chave = "AQ.Ab8RN6IrdbDHN_JmQ1gRiBiLijZAke_xSGeAAa_p9fOPV_GMuA"
     
     try:
@@ -188,7 +187,6 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
         if mime_type not in ["image/jpeg", "image/png", "image/webp"]:
             mime_type = "image/jpeg"
             
-        # Converte a imagem para Base64 para enviar via JSON na API REST
         conteudo_b64 = base64.b64encode(conteudo_bytes).decode("utf-8")
         
         prompt = """
@@ -206,11 +204,11 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
         }
         """
         
-        # Endereço oficial da API REST do Gemini 1.5 Flash
         url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
         
+        # Correção crucial: Utiliza o cabeçalho nativo do Google para Chaves de API
         headers = {
-            "Authorization": f"Bearer {token_chave}",
+            "x-goog-api-key": token_chave,
             "Content-Type": "application/json"
         }
         
