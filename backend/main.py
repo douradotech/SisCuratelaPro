@@ -176,18 +176,14 @@ def anexar_comprovante(id_transacao: str, file: UploadFile = File(...), db: Sess
 @app.post("/transacoes/extrair-ia")
 def extrair_dados_documento_ia(file: UploadFile = File(...)):
     import json
-    import base64
-    import requests
+    from google import genai 
     
-    token_chave = "AQ.Ab8RN6IrdbDHN_JmQ1gRiBiLijZAke_xSGeAAa_p9fOPV_GMuA"
+    # O novo SDK aceita AQ... nativamente e resolve a autenticação internamente
+    client = genai.Client(api_key="AQ.Ab8RN6IrdbDHN_JmQ1gRiBiLijZAke_xSGeAAa_p9fOPV_GMuA")
     
     try:
         conteudo_bytes = file.file.read()
         mime_type = file.content_type if file.content_type else "image/jpeg"
-        if mime_type not in ["image/jpeg", "image/png", "image/webp"]:
-            mime_type = "image/jpeg"
-            
-        conteudo_b64 = base64.b64encode(conteudo_bytes).decode("utf-8")
         
         prompt = """
         Você é um assistente financeiro especialista em auditoria. 
@@ -204,37 +200,18 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
         }
         """
         
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-        
-        # Correção crucial: Utiliza o cabeçalho nativo do Google para Chaves de API
-        headers = {
-            "x-goog-api-key": token_chave,
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "contents": [
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=[
+                prompt,
                 {
-                    "parts": [
-                        {"text": prompt},
-                        {
-                            "inline_data": {
-                                "mime_type": mime_type,
-                                "data": conteudo_b64
-                            }
-                        }
-                    ]
+                    "mime_type": mime_type,
+                    "data": conteudo_bytes
                 }
             ]
-        }
+        )
         
-        resposta = requests.post(url, headers=headers, json=payload)
-        
-        if resposta.status_code != 200:
-            raise Exception(f"Erro da API Google ({resposta.status_code}): {resposta.text}")
-            
-        resposta_json = resposta.json()
-        texto_limpo = resposta_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+        texto_limpo = response.text.strip()
         
         if texto_limpo.startswith("```json"):
             texto_limpo = texto_limpo[7:-3].strip()
