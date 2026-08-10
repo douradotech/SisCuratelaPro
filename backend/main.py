@@ -177,10 +177,10 @@ def anexar_comprovante(id_transacao: str, file: UploadFile = File(...), db: Sess
 def extrair_dados_documento_ia(file: UploadFile = File(...)):
     import json
     from google import genai 
-    from google.genai import types # NOVA IMPORTAÇÃO OBRIGATÓRIA
+    from google.genai import types
     
-    # Autenticação nativa resolvida
-    client = genai.Client(api_key="AQ.Ab8RN6IrdbDHN_JmQ1gRiBiLijZAke_xSGeAAa_p9fOPV_GMuA")
+    # O SDK novo busca a chave diretamente da variável de ambiente GEMINI_API_KEY
+    client = genai.Client()
     
     try:
         conteudo_bytes = file.file.read()
@@ -201,7 +201,6 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
         }
         """
         
-        # O novo padrão rigoroso para envio de imagens
         imagem_part = types.Part.from_bytes(
             data=conteudo_bytes,
             mime_type=mime_type
