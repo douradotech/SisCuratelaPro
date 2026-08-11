@@ -173,19 +173,29 @@ def anexar_comprovante(id_transacao: str, file: UploadFile = File(...), db: Sess
         
     return {"status": "sucesso", "mensagem": "Anexado com sucesso", "arquivo": nome_arquivo_seguro}
 
-import os
-import json
-import google.generativeai as genai
-
-# Configuração direta e exclusiva via API Key do cofre do Render
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-
 @app.post("/transacoes/extrair-ia")
 def extrair_dados_documento_ia(file: UploadFile = File(...)):
+    import os
+    import json
+    import base64
+    import requests
+    
     try:
         conteudo_bytes = file.file.read()
         mime_type = file.content_type if file.content_type else "image/jpeg"
+        
+        # 1. Preparação da Imagem em Base64 para consumo REST puro
+        base64_image = base64.b64encode(conteudo_bytes).decode("utf-8")
+        
+        # 2. Leitura da Chave AQ.
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            raise Exception("A variável GEMINI_API_KEY não foi encontrada no ambiente do Render.")
 
+        # 3. Construção da Requisição Direta via Endpoint Oficial (Bypass do SDK)
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        headers = {"Content-Type": "application/json"}
+        
         prompt = """
         Você é um assistente financeiro especialista em auditoria.
         Analise esta imagem de comprovante fiscal/recibo.
@@ -200,16 +210,32 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
           "documento_referencia_sugerido": "Numero do cupom (NFC-e, CCF, etc) ou S/N"
         }
         """
-
-        # Utilizando o modelo padrão estável do AI Studio
-        model = genai.GenerativeModel("gemini-1.5-flash")
         
-        response = model.generate_content([
-            prompt,
-            {"mime_type": mime_type, "data": conteudo_bytes}
-        ])
-
-        texto_limpo = response.text.strip()
+        payload = {
+            "contents": [{
+                "parts": [
+                    {"text": prompt},
+                    {
+                        "inline_data": {
+                            "mime_type": mime_type,
+                            "data": base64_image
+                        }
+                    }
+                ]
+            }]
+        }
+        
+        # 4. Disparo HTTP nativo - Transparência absoluta na requisição
+        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        
+        if response.status_code != 200:
+            raise Exception(f"Falha na API Google (HTTP {response.status_code}): {response.text}")
+            
+        res_json = response.json()
+        
+        # 5. Tratamento Seguro da Resposta
+        texto_limpo = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+        
         if texto_limpo.startswith("```json"):
             texto_limpo = texto_limpo[7:-3].strip()
         elif texto_limpo.startswith("```"):
@@ -228,4 +254,4 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
 
     except Exception as e:
         print(f"ERRO CRÍTICO IA: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Falha na IA: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Falha na Extração: {str(e)}")
