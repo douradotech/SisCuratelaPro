@@ -141,7 +141,6 @@ else:
                             files = {"file": (getattr(arquivo_capturado, 'name', 'foto_camera.jpg'), arquivo_capturado.getvalue(), getattr(arquivo_capturado, 'type', 'image/jpeg'))}
                             
                             resp_ocr = requests.post("http://127.0.0.1:8000/transacoes/extrair-ia", files=files, headers=headers, timeout=60)
-                            
                             if resp_ocr.status_code == 200:
                                 res_json = resp_ocr.json()
                                 
