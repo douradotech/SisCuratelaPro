@@ -181,7 +181,7 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
     
     try:
         # O sistema agora vai puxar a chave com segurança lá do cofre do Render
-        client = genai.Client()
+        client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
         
         conteudo_bytes = file.file.read()
         mime_type = file.content_type if file.content_type else "image/jpeg"
