@@ -10,3 +10,4 @@ streamlit
 requests
 pandas
 google-genai
+google-generativeai

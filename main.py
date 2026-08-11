@@ -177,7 +177,7 @@ import os
 import json
 import google.generativeai as genai
 
-# Configuração explícita da API Key (ignora Vertex/OAuth)
+# Configuração direta e exclusiva via API Key do cofre do Render
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
 @app.post("/transacoes/extrair-ia")
@@ -201,10 +201,9 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
         }
         """
 
-        # Instancia o modelo estável padrão do AI Studio
+        # Utilizando o modelo padrão estável do AI Studio
         model = genai.GenerativeModel("gemini-1.5-flash")
         
-        # Envia a imagem e o prompt diretamente usando a API Key
         response = model.generate_content([
             prompt,
             {"mime_type": mime_type, "data": conteudo_bytes}
