@@ -179,7 +179,7 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
     from google import genai 
     from google.genai import types
     
-   try:
+    try:
         # O sistema agora vai puxar a chave com segurança lá do cofre do Render
         client = genai.Client()
         
