@@ -140,7 +140,7 @@ else:
                             headers = {"Authorization": f"Bearer {st.session_state.get('token', '')}"}
                             files = {"file": (getattr(arquivo_capturado, 'name', 'foto_camera.jpg'), arquivo_capturado.getvalue(), getattr(arquivo_capturado, 'type', 'image/jpeg'))}
                             
-                            resp_ocr = requests.post("https://siscuratelapro.onrender.com/transacoes/extrair-ia", files=files, headers=headers, timeout=60)
+                            resp_ocr = requests.post("http://127.0.0.1:8000/transacoes/extrair-ia", files=files, headers=headers, timeout=60)
                             
                             if resp_ocr.status_code == 200:
                                 res_json = resp_ocr.json()
@@ -325,7 +325,7 @@ else:
                     
                     files = {"file": (nome_arq, bytes_arq, tipo_arq)}
                     headers = {"Authorization": f"Bearer {st.session_state['token']}"}
-                    resp_upload = requests.post(f"https://siscuratelapro.onrender.com/transacoes/{id_gerado}/anexar", files=files, headers=headers)
+                    resp_upload = requests.post(f"http://127.0.0.1:8000/transacoes/{id_gerado}/anexar", files=files, headers=headers)
                     if resp_upload.status_code == 200:
                         st.session_state["msg_sucesso"] = "✅ Lançamento gravado e Comprovante anexado com sucesso!"
                     else:
@@ -349,7 +349,7 @@ else:
 
         try:
             headers = {"Authorization": f"Bearer {st.session_state['token']}"}
-            resposta = requests.get("https://siscuratelapro.onrender.com/transacoes/listar", headers=headers, timeout=10)
+            resposta = requests.get("http://127.0.0.1:8000/transacoes/listar", headers=headers, timeout=10)
             
             if resposta.status_code == 200:
                 lista_transacoes = resposta.json()
@@ -441,7 +441,7 @@ else:
                                 transacao_selecionada = st.selectbox("Selecione o comprovante:", list(opcoes_comprovantes.keys()))
                                 id_selec = opcoes_comprovantes[transacao_selecionada]
                                 
-                                resp_file = requests.get(f"https://siscuratelapro.onrender.com/transacoes/{id_selec}/comprovante", headers=headers)
+                                resp_file = requests.get(f"http://127.0.0.1:8000/transacoes/{id_selec}/comprovante", headers=headers)
                                 if resp_file.status_code == 200:
                                     st.download_button(label="💾 Baixar PDF/Imagem", data=resp_file.content, file_name=f"comprovante_{id_selec}.jpg", mime=resp_file.headers.get('Content-Type'))
                                 else:
