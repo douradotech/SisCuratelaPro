@@ -173,53 +173,51 @@ def anexar_comprovante(id_transacao: str, file: UploadFile = File(...), db: Sess
         
     return {"status": "sucesso", "mensagem": "Anexado com sucesso", "arquivo": nome_arquivo_seguro}
 
+import os
+import json
+import google.generativeai as genai
+
+# Configuração explícita da API Key (ignora Vertex/OAuth)
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+
 @app.post("/transacoes/extrair-ia")
 def extrair_dados_documento_ia(file: UploadFile = File(...)):
-    import json
-    from google import genai 
-    from google.genai import types
-    
     try:
-        # O sistema agora vai puxar a chave com segurança lá do cofre do Render
-        client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
-        
         conteudo_bytes = file.file.read()
         mime_type = file.content_type if file.content_type else "image/jpeg"
-        
+
         prompt = """
-        Você é um assistente financeiro especialista em auditoria. 
+        Você é um assistente financeiro especialista em auditoria.
         Analise esta imagem de comprovante fiscal/recibo.
         Extraia os dados solicitados e retorne APENAS um JSON válido.
         Não use markdown, crases ou blocos de código. Retorne ESTRITAMENTE o texto do JSON.
-        
+
         Modelo esperado:
         {
-            "valor_sugerido": "valor numérico com duas casas decimais separado por vírgula (ex: 367,02)",
-            "estabelecimento_identificado": "Nome do local impresso no topo (ex: DROGARIA ROSARIO)",
-            "descricao_sugerida": "Breve resumo dos itens",
-            "documento_referencia_sugerido": "Numero do cupom (NFC-e, CCF, etc) ou S/N"
+          "valor_sugerido": "valor numérico com duas casas decimais separado por vírgula (ex: 367,02)",
+          "estabelecimento_identificado": "Nome do local impresso no topo (ex: DROGARIA ROSARIO)",
+          "descricao_sugerida": "Breve resumo dos itens",
+          "documento_referencia_sugerido": "Numero do cupom (NFC-e, CCF, etc) ou S/N"
         }
         """
+
+        # Instancia o modelo estável padrão do AI Studio
+        model = genai.GenerativeModel("gemini-1.5-flash")
         
-        imagem_part = types.Part.from_bytes(
-            data=conteudo_bytes,
-            mime_type=mime_type
-        )
-        
-        response = client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=[prompt, imagem_part]
-        )
-        
+        # Envia a imagem e o prompt diretamente usando a API Key
+        response = model.generate_content([
+            prompt,
+            {"mime_type": mime_type, "data": conteudo_bytes}
+        ])
+
         texto_limpo = response.text.strip()
-        
         if texto_limpo.startswith("```json"):
             texto_limpo = texto_limpo[7:-3].strip()
         elif texto_limpo.startswith("```"):
             texto_limpo = texto_limpo[3:-3].strip()
-            
+
         dados = json.loads(texto_limpo)
-        
+
         return {
             "status": "sucesso",
             "valor_sugerido": dados.get("valor_sugerido", ""),
@@ -228,14 +226,7 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
             "estabelecimento_identificado": dados.get("estabelecimento_identificado", ""),
             "mensagem": "Inteligência Artificial processou o documento com sucesso!"
         }
-        
+
     except Exception as e:
-        print(f"[ERRO CRÍTICO IA]: {str(e)}")
-        return {
-            "status": "erro",
-            "valor_sugerido": "",
-            "descricao_sugerida": f"Falha na Extração: {str(e)}",
-            "documento_referencia_sugerido": "",
-            "estabelecimento_identificado": "Erro no Processamento Visual",
-            "mensagem": "A IA não conseguiu ler o documento."
-        }
+        print(f"ERRO CRÍTICO IA: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Falha na IA: {str(e)}")
