@@ -22,7 +22,7 @@ if "logado" not in st.session_state:
     })
 
 def login_backend(email, senha):
-    url_api = "http://localhost:8000/auth/login"
+    url_api = "http://127.0.0.1:8000/auth/login"
     try:
         resposta = requests.post(url_api, json={"email": email, "senha": senha}, timeout=30)
         if resposta.status_code == 200:
@@ -38,7 +38,7 @@ def login_backend(email, senha):
         return False, "Erro Crítico: Backend desligado.", None, None
 
 def enviar_lancamento(dados_transacao, token):
-    url_api = "http://localhost:8000/transacoes/novo"
+    url_api = "http://127.0.0.1:8000/transacoes/novo"
     headers = {"Authorization": f"Bearer {token}"}
     try:
         resposta = requests.post(url_api, json=dados_transacao, headers=headers)
