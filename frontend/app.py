@@ -5,8 +5,15 @@ import pandas as pd
 import re
 import time
 
-st.set_page_config(page_title="SisCuratela Pro - Gestão e Compliance", page_icon="⚖️", layout="wide")
+# Configuração da página otimizada para Desktop e Mobile (Layout Responsivo)
+st.set_page_config(
+    page_title="SisCuratela Pro - Gestão e Compliance",
+    page_icon="⚖️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
+# Inicialização segura do session_state
 if "logado" not in st.session_state:
     st.session_state.update({
         "logado": False,
@@ -52,6 +59,54 @@ def enviar_lancamento(dados_transacao, token):
         return False, "Falha de conexão com o Backend.", None
 
 # ==========================================
+# SEÇÃO DA IA: LEITURA INTELIGENTE DE EXTRATOS
+# ==========================================
+def render_extrato_ia_secao():
+    st.title("🤖 Leitura Inteligente de Extratos Bancários")
+    st.markdown("Faça o upload do extrato em PDF do **Banco do Brasil** para extração automática dos saldos e recebimentos oficiais.")
+    st.write("---")
+
+    arquivo_pdf = st.file_uploader("Selecione o arquivo PDF do extrato bancário", type=["pdf"], key="uploader_extrato_pdf")
+
+    if arquivo_pdf is not None:
+        if st.button("Processar Extrato com Inteligência Artificial", type="primary", key="btn_proc_extrato"):
+            with st.spinner("Enviando documento para análise segura do Gemini na nuvem..."):
+                try:
+                    # Altere para a URL de produção no Render
+                    api_url = "https://siscuratelapro-1.onrender.com/api/extrair-extrato"
+                    
+                    files = {"file": (arquivo_pdf.name, arquivo_pdf.getvalue(), "application/pdf")}
+                    response = requests.post(api_url, files=files, timeout=60)
+                    
+                    if response.status_code == 200:
+                        resultado = response.json()
+                        st.success("Extrato processado com sucesso!")
+                        
+                        st.markdown("### 📊 Resumo Financeiro Identificado")
+                        col1, col2, col3 = st.columns(3)
+                        col1.metric("Mês de Referência", resultado.get("mes_referencia", "N/D"))
+                        
+                        saldo_cc = resultado.get("saldo_conta_corrente", 0.0)
+                        col2.metric("Saldo Conta Corrente", f"R$ {saldo_cc:,.2f}")
+                        
+                        saldo_app = resultado.get("saldo_aplicacoes", 0.0)
+                        col3.metric("Saldo Aplicações", f"R$ {saldo_app:,.2f}")
+                        
+                        st.markdown("### 📥 Entradas Identificadas (Aposentadorias, Aluguéis e Rendimentos)")
+                        recebimentos = resultado.get("recebimentos", [])
+                        
+                        if recebimentos:
+                            st.dataframe(recebimentos, use_container_width=True)
+                        else:
+                            st.info("Nenhum recebimento foi catalogado neste extrato específico.")
+                            
+                    else:
+                        st.error(f"Erro no servidor (Código {response.status_code}): {response.text}")
+                        
+                except Exception as e:
+                    st.error(f"Falha de comunicação com o backend: {str(e)}")
+
+# ==========================================
 # TELA DE LOGIN SEGURA
 # ==========================================
 if not st.session_state["logado"]:
@@ -80,7 +135,7 @@ if not st.session_state["logado"]:
                     st.error(f"Falha na autenticação: {nome_ou_erro}")
 
 # ==========================================
-# PAINEL LOGADO (ENTERPRISE)
+# PAINEL LOGADO (ENTERPRISE & MOBILE FRIENDLY)
 # ==========================================
 else:
     st.sidebar.title("Painel de Controle")
@@ -88,7 +143,16 @@ else:
     st.sidebar.markdown(f"**Perfil:** `{st.session_state['perfil_usuario']}`")
     st.sidebar.write("---")
 
-    menu = st.sidebar.radio("Navegação", ["Painel Central", "Novo Lançamento Financeiro", "Extratos e Relatórios"])
+    # Menu lateral otimizado com a nova opção de extrato IA
+    menu = st.sidebar.radio(
+        "Navegação", 
+        [
+            "Painel Central", 
+            "Novo Lançamento Financeiro", 
+            "Extratos IA (Banco do Brasil)", 
+            "Extratos e Relatórios"
+        ]
+    )
 
     if st.sidebar.button("Encerrar Sessão (Logout)"):
         st.session_state.clear()
@@ -97,7 +161,10 @@ else:
     if menu == "Painel Central":
         st.title("📊 Painel Executivo e Compliance")
         st.success("Conexão estabelecida com segurança entre Frontend, Backend e PostgreSQL!")
-        st.info("Utilize o menu lateral para registrar transações financeiras com validação automática para a prestação de contas.")
+        st.info("Utilize o menu lateral para registrar transações financeiras e auditar extratos para a prestação de contas.")
+
+    elif menu == "Extratos IA (Banco do Brasil)":
+        render_extrato_ia_secao()
 
     elif menu == "Novo Lançamento Financeiro":
         st.title("💰 Novo Lançamento Financeiro e Leitura Inteligente (OCR/IA)")
@@ -129,7 +196,7 @@ else:
                 st.markdown("Posicione o documento em frente à câmera do seu dispositivo e clique em tirar foto:")
                 arquivo_capturado = st.camera_input("Tirar Foto do Comprovante", key="camera_ia_novo")
             
-            st.write("") # Espaçamento
+            st.write("") 
             if st.button("🚀 Processar Documento com IA", type="primary", key="btn_executar_ia"):
                 
                 if arquivo_capturado is None:
@@ -314,7 +381,6 @@ else:
 
             sucesso_transacao, msg, id_gerado = enviar_lancamento(payload, st.session_state["token"])
             if sucesso_transacao:
-                # CORREÇÃO TÁTICA: O sistema usa a imagem da IA automaticamente
                 arquivo_para_anexar = arquivo_capturado
                 
                 if arquivo_para_anexar is not None:
