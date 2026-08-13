@@ -1,8 +1,28 @@
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
+from pydantic import BaseModel
 from google import genai
 from google.genai import types
 import json
 import os
+
+app = FastAPI()
+
+# Modelo para o login
+class LoginRequest(BaseModel):
+    email: str
+    senha: str
+
+# Rota de Login que estava faltando
+@app.post("/auth/login")
+async def login(dados: LoginRequest):
+    # Insira aqui a sua validação com o Supabase ou a lógica que você já usava antes
+    # Exemplo básico de validação do usuário principal:
+    if dados.email == "allandourado@gmail.com":
+        return {"access_token": "token_exemplo_seguro", "token_type": "bearer"}
+    raise HTTPException(status_code=401, detail="Credenciais inválidas")
+
+def verificar_token():
+    return True
 
 app = FastAPI()
 
