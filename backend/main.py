@@ -5,38 +5,28 @@ from google.genai import types
 import json
 import os
 
+# 1. INSTANCIAÇÃO DO FASTAPI (DEVE FICAR NO TOPO)
 app = FastAPI()
 
-# Modelo para o login
+# 2. MODELOS E AUTENTICAÇÃO
 class LoginRequest(BaseModel):
     email: str
     senha: str
 
-# Rota de Login que estava faltando
 @app.post("/auth/login")
 async def login(dados: LoginRequest):
-    # Insira aqui a sua validação com o Supabase ou a lógica que você já usava antes
-    # Exemplo básico de validação do usuário principal:
     if dados.email == "allandourado@gmail.com":
-        return {"access_token": "token_exemplo_seguro", "token_type": "bearer"}
+        return {
+            "access_token": "token_seguro_siscuratela_pro",
+            "token_type": "bearer",
+            "usuario": "Allan Dourado"
+        }
     raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
 def verificar_token():
     return True
 
-app = FastAPI()
-
-# =========================================================================
-# FUNÇÃO DE SEGURANÇA 
-# (Adicionada para evitar o erro 'verificar_token not defined')
-# Se você tinha uma conexão com Supabase aqui, mantenha a sua original!
-# =========================================================================
-def verificar_token():
-    return True
-
-# =========================================================================
-# ROTA 1: LEITURA INTELIGENTE DE EXTRATOS BANCÁRIOS (PDF)
-# =========================================================================
+# 3. ROTA 1: LEITURA INTELIGENTE DE EXTRATOS BANCÁRIOS (PDF)
 @app.post("/api/extrair-extrato")
 async def extrair_extrato(file: UploadFile = File(...)):
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -72,9 +62,7 @@ async def extrair_extrato(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao processar extrato com IA: {str(e)}")
 
-# =========================================================================
-# ROTA 2: LEITURA DE COMPROVANTES AVULSOS E NOTAS FISCAIS
-# =========================================================================
+# 4. ROTA 2: LEITURA DE COMPROVANTES AVULSOS E NOTAS FISCAIS
 @app.post("/transacoes/extrair-ia")
 async def extrair_dados_documento_ia(file: UploadFile = File(...), token: str = Depends(verificar_token)):
     api_key = os.environ.get("GEMINI_API_KEY")
