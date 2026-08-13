@@ -1,1 +1,0 @@
-cd "D:\PASTA DISCO _D_\IA- Inteligência Artificial\Projeto_SisCuratela_Pro\Projeto_SisCuratela_Pro\backend"

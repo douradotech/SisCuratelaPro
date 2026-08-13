@@ -1,9 +1,0 @@
-/Projeto_SisCuratela_Pro/
-│
-├── backend/                  # Motor Lógico e Banco de Dados
-│   ├── main.py               # Servidor FastAPI
-│   └── requirements.txt      # (fastapi, uvicorn, pydantic, pyjwt)
-│
-└── frontend/                 # Interface do Usuário
-    ├── app.py                # Seu código Streamlit atualizado
-    └── requirements.txt      # (streamlit, requests)
