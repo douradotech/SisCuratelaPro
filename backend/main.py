@@ -1,330 +1,72 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import FileResponse
-from pydantic import BaseModel, field_validator
-from decimal import Decimal
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta, timezone
-import uuid
-import bcrypt
-import jwt
-import shutil
-import os
-import re
-from database import get_db
-from models import TransacaoModel, AuditoriaModel, UsuarioModel
-import json
 from google import genai
 from google.genai import types
-# Correção da declaração da API
-app = FastAPI(title="API SisCuratela Pro - Backend de Produção")
-
-# O SDK puxa automaticamente a variável GEMINI_API_KEY do Render
-client = genai.Client()
-SECRET_KEY = "ChaveSuperSecreta_MudarEmProducao_MPDFT"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
-
-security = HTTPBearer()
-
-def gerar_hash(senha: str) -> str:
-    return bcrypt.hashpw(senha.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-
-def obter_usuario_atual(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        usuario_id: str = payload.get("sub")
-        if usuario_id is None:
-            raise HTTPException(status_code=401, detail="Token inválido: Usuário não identificado.")
-        return usuario_id
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Token de acesso inválido ou expirado.")
-
-class LoginRequest(BaseModel):
-    email: str
-    senha: str
-
-class LoginResponse(BaseModel):
-    access_token: str
-    nome: str
-    perfil: str
-
-class LancamentoRequest(BaseModel):
-    id_conta: str
-    id_micro: str
-    data_transacao: str
-    valor: Decimal
-    descricao: str
-    documento_referencia: str = None
-
-    @field_validator('descricao')
-    def validar_descricao(cls, v):
-        termos_proibidos = ['diversos', 'outros', 'vários', 'gastos', 'despesas', 'compra']
-        if any(termo in v.lower() for termo in termos_proibidos):
-            raise ValueError("Rejeitado: A descrição contém termos genéricos não aceitos pelo MPDFT.")
-        if len(v.strip()) < 10:
-            raise ValueError("Rejeitado: A descrição é muito curta. Detalhe melhor o lançamento.")
-        return v
-
-    @field_validator('valor')
-    def validar_valor(cls, v):
-        if v <= 0:
-            raise ValueError("Rejeitado: O valor do lançamento deve ser maior que zero.")
-        if v.as_tuple().exponent < -2:
-            raise ValueError("Rejeitado: O sistema financeiro não permite mais de duas casas decimais.")
-        return v
-
-def registrar_audit_log_db(email: str, acao: str, status: str, db: Session):
-    try:
-        novo_log = AuditoriaModel(email=email, acao=acao, status=status)
-        db.add(novo_log)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        print(f"[ERRO AUDIT] {str(e)}")
-
-def criar_token_jwt(dados: dict):
-    dados_para_codificar = dados.copy()
-    expiracao = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    dados_para_codificar.update({"exp": expiracao})
-    return jwt.encode(dados_para_codificar, SECRET_KEY, algorithm=ALGORITHM)
-
-@app.post("/auth/login", response_model=LoginResponse)
-def login_oficial(request: LoginRequest, db: Session = Depends(get_db)):
-    print(f"\n[RADAR] Iniciando tentativa de login para: {request.email}")
-    email_digitado = request.email.lower().strip()
-    print("[RADAR] Conectando ao Supabase para buscar usuário...")
-    usuario = db.query(UsuarioModel).filter(UsuarioModel.email == email_digitado).first()
-    
-    if not usuario:
-        print("[RADAR] Usuário não encontrado no banco.")
-        registrar_audit_log_db(email_digitado, "LOGIN FALHA", "Credenciais inválidas", db)
-        raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
-    
-    print("[RADAR] Usuário encontrado! Validando a criptografia da senha...")
-    senha_valida = bcrypt.checkpw(request.senha.encode('utf-8'), usuario.senha_hash.encode('utf-8'))
-    
-    if not senha_valida:
-        print("[RADAR] Senha rejeitada.")
-        registrar_audit_log_db(email_digitado, "LOGIN FALHA", "Credenciais inválidas", db)
-        raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
-        
-    print("[RADAR] Senha aprovada! Gerando Token de Acesso...")
-    access_token = criar_token_jwt({"sub": usuario.email, "perfil": usuario.perfil})
-    registrar_audit_log_db(email_digitado, "LOGIN SUCESSO", "Acesso liberado", db)
-    print("[RADAR] Login concluído com sucesso!")
-    
-    return {
-        "nome": usuario.nome,
-        "perfil": usuario.perfil,
-        "access_token": access_token
-    }
-
-@app.post("/transacoes/novo")
-def registrar_nova_transacao(dados: LancamentoRequest, db: Session = Depends(get_db), usuario_id_autenticado: str = Depends(obter_usuario_atual)):
-    nova_transacao = TransacaoModel(
-        id_transacao=str(uuid.uuid4()),
-        id_conta=dados.id_conta,
-        id_usuario=usuario_id_autenticado,
-        id_micro=dados.id_micro,
-        data_transacao=dados.data_transacao,
-        valor=dados.valor,
-        descricao=dados.descricao,
-        documento_referencia=dados.documento_referencia,
-        exige_alvara=True if dados.valor > 5000.00 else False
-    )
-    try:
-        db.add(nova_transacao)
-        db.commit()
-        db.refresh(nova_transacao)
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao gravar transação: {str(e)}")
-        
-    return {"status": "sucesso", "mensagem": "Lançamento financeiro gravado com sucesso no banco de dados.", "id_transacao": nova_transacao.id_transacao}
-
-@app.get("/transacoes/listar")
-def listar_transacoes(db: Session = Depends(get_db), usuario_id_autenticado: str = Depends(obter_usuario_atual)):
-    transacoes = db.query(TransacaoModel).filter(TransacaoModel.id_usuario == usuario_id_autenticado).all()
-    return transacoes
-
-PASTA_UPLOADS = "uploads_comprovantes"
-os.makedirs(PASTA_UPLOADS, exist_ok=True)
-
-@app.post("/transacoes/{id_transacao}/anexar")
-def anexar_comprovante(id_transacao: str, file: UploadFile = File(...), db: Session = Depends(get_db), usuario_id_autenticado: str = Depends(obter_usuario_atual)):
-    transacao = db.query(TransacaoModel).filter(TransacaoModel.id_transacao == id_transacao).first()
-    if not transacao:
-        raise HTTPException(status_code=404, detail="Transação financeira não encontrada.")
-        
-    extensoes_permitidas = [".pdf", ".png", ".jpg", ".jpeg"]
-    extensao = os.path.splitext(file.filename)[1].lower()
-    if extensao not in extensoes_permitidas:
-        raise HTTPException(status_code=400, detail="Formato inválido.")
-        
-    nome_arquivo_seguro = f"{uuid.uuid4()}{extensao}"
-    caminho_completo = os.path.join(PASTA_UPLOADS, nome_arquivo_seguro)
-    
-    try:
-        with open(caminho_completo, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        transacao.comprovante_path = caminho_completo
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao salvar arquivo: {str(e)}")
-        
-    return {"status": "sucesso", "mensagem": "Anexado com sucesso", "arquivo": nome_arquivo_seguro}
-
-@app.post("/transacoes/extrair-ia")
-def extrair_dados_documento_ia(file: UploadFile = File(...)):
-    import os
-    import json
-    import base64
-    import requests
-    
-    try:
-        conteudo_bytes = file.file.read()
-        mime_type = file.content_type if file.content_type else "image/jpeg"
-        
-        # 1. Preparação da Imagem em Base64 para consumo REST puro
-        base64_image = base64.b64encode(conteudo_bytes).decode("utf-8")
-        
-        # 2. Leitura da Chave AQ.
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            raise Exception("A variável GEMINI_API_KEY não foi encontrada no ambiente do Render.")
-
-        # 3. Construção da Requisição Direta via Endpoint Oficial (Bypass do SDK)
-        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
-        headers = {"Content-Type": "application/json"}
-        
-        prompt = """
-        Você é um assistente financeiro especialista em auditoria.
-        Analise esta imagem de comprovante fiscal/recibo.
-        Extraia os dados solicitados e retorne APENAS um JSON válido.
-        Não use markdown, crases ou blocos de código. Retorne ESTRITAMENTE o texto do JSON.
-
-        Modelo esperado:
-        {
-          "valor_sugerido": "valor numérico com duas casas decimais separado por vírgula (ex: 367,02)",
-          "estabelecimento_identificado": "Nome do local impresso no topo (ex: DROGARIA ROSARIO)",
-          "descricao_sugerida": "Breve resumo dos itens",
-          "documento_referencia_sugerido": "Numero do cupom (NFC-e, CCF, etc) ou S/N"
-        }
-        """
-        
-        payload = {
-            "contents": [{
-                "parts": [
-                    {"text": prompt},
-                    {
-                        "inline_data": {
-                            "mime_type": mime_type,
-                            "data": base64_image
-                        }
-                    }
-                ]
-            }]
-        }
-        
-        # 4. Disparo HTTP nativo - Transparência absoluta na requisição
-        response = requests.post(url, headers=headers, json=payload, timeout=60)
-        
-        if response.status_code != 200:
-            raise Exception(f"Falha na API Google (HTTP {response.status_code}): {response.text}")
-            
-        res_json = response.json()
-        
-        # 5. Tratamento Seguro da Resposta
-        texto_limpo = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
-        
-        if texto_limpo.startswith("```json"):
-            texto_limpo = texto_limpo[7:-3].strip()
-        elif texto_limpo.startswith("```"):
-            texto_limpo = texto_limpo[3:-3].strip()
-
-        dados = json.loads(texto_limpo)
-
-        return {
-            "status": "sucesso",
-            "valor_sugerido": dados.get("valor_sugerido", ""),
-            "descricao_sugerida": dados.get("descricao_sugerida", ""),
-            "documento_referencia_sugerido": dados.get("documento_referencia_sugerido", "S/N"),
-            "estabelecimento_identificado": dados.get("estabelecimento_identificado", ""),
-            "mensagem": "Inteligência Artificial processou o documento com sucesso!"
-        }
-
-    except Exception as e:
-        print(f"ERRO CRÍTICO IA: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Falha na Extração: {str(e)}")
+import json
 
 @app.post("/api/extrair-extrato")
-async def extrair_recebimentos_extrato(file: UploadFile = File(...)):
-    """
-    Recebe um PDF de extrato bancário, envia para o Gemini 1.5 Flash,
-    e retorna os recebimentos e saldos (Conta Corrente e Aplicações) formatados.
-    """
-    if not file.filename.endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="O arquivo deve ser um PDF.")
-
-    # Salva o arquivo temporariamente no servidor
-    temp_path = f"/tmp/{file.filename}"
-    with open(temp_path, "wb") as f:
-        f.write(await file.read())
-
-    arquivo_banco = None
+async def extrair_extrato(file: UploadFile = File(...)):
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY não configurada no servidor.")
+    
+    conteudo_bytes = await file.read()
     
     try:
-        # 1. Upload seguro para a API do Google (File API)
-        arquivo_banco = client.files.upload(file=temp_path)
-        
-        # 2. O Prompt Especialista
-        prompt = """
-        Você é um assistente financeiro especialista em prestação de contas de curatela.
-        Analise o documento do extrato bancário (Banco do Brasil) em anexo.
-        
-        Sua missão:
-        1. Localize o Saldo Final da Conta Corrente e o Saldo Final Total do Portfólio de Aplicações/Investimentos.
-        2. Extraia TODOS e APENAS os recebimentos (créditos, entradas, transferências recebidas, aposentadorias, aluguéis, rendimentos).
-        3. IGNORE completamente todas as saídas (débitos, pagamentos, tarifas, transferências enviadas, PIX enviados).
-        
-        Retorne ESTRITAMENTE em formato JSON, seguindo exatamente esta estrutura:
-        {
-          "mes_referencia": "MM/AAAA",
-          "saldo_conta_corrente": 0.00,
-          "saldo_aplicacoes": 0.00,
-          "recebimentos": [
-            {
-              "data": "DD/MM/AAAA",
-              "descricao": "NOME OU ORIGEM DO RECEBIMENTO",
-              "valor": 0.00,
-              "classificacao": "Aposentadoria / Renda de Aluguel / Rendimento / Outros"
-            }
-          ]
-        }
-        """
-        
-        # 3. Processamento via Gemini
+        client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
             model='gemini-1.5-flash',
-            contents=[arquivo_banco, prompt],
+            contents=[
+                types.Part.from_bytes(
+                    data=conteudo_bytes,
+                    mime_type="application/pdf",
+                ),
+                (
+                    "Você é um auditor financeiro especialista em extratos bancários do Banco do Brasil. "
+                    "Analise este extrato em PDF e retorne estritamente um JSON válido contendo: "
+                    "1. 'mes_referencia' (string, ex: 'Agosto/2026'), "
+                    "2. 'saldo_conta_corrente' (float), "
+                    "3. 'saldo_aplicacoes' (float), "
+                    "4. 'recebimentos' (lista de objetos com 'data', 'descricao', 'valor'). "
+                    "Atenção: Ignore totalmente os débitos e saídas. Colete apenas os saldos finais e os recebimentos de entradas (como aposentadorias, aluguéis e rendimentos)."
+                )
+            ],
             config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.1 
+                response_mime_type="application/json"
             )
         )
-        
-        dados_json = json.loads(response.text)
-        return dados_json
-
+        return json.loads(response.text)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao processar extrato: {str(e)}")
-        
-    finally:
-        # 4. Limpeza e Segurança
-        if arquivo_banco:
-            client.files.delete(name=arquivo_banco.name) 
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+        raise HTTPException(status_code=500, detail=f"Erro ao processar extrato com IA: {str(e)}")
+
+
+@app.post("/transacoes/extrair-ia")
+async def extrair_dados_documento_ia(file: UploadFile = File(...), token: str = Depends(verificar_token)):
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY não configurada no servidor.")
+    
+    conteudo_bytes = await file.read()
+    mime_type = file.content_type if file.content_type else "image/jpeg"
+    
+    try:
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=[
+                types.Part.from_bytes(
+                    data=conteudo_bytes,
+                    mime_type=mime_type,
+                ),
+                (
+                    "Você é um assistente financeiro especialista em auditoria. Analise esta imagem de comprovante fiscal/recibo. "
+                    "Extraia os dados solicitados e retorne APENAS um JSON válido com as chaves: "
+                    "'valor_sugerido' (string com ponto ou vírgula), 'descricao_sugerida' (string detalhada), "
+                    "'documento_referencia_sugerido' (string), 'estabelecimento_identificado' (string)."
+                )
+            ],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json"
+            )
+        )
+        return json.loads(response.text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Falha na Extração: {str(e)}")
