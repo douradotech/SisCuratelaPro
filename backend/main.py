@@ -1,7 +1,10 @@
+from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
 from google import genai
 from google.genai import types
 import json
+import os
 
+app = FastAPI()
 @app.post("/api/extrair-extrato")
 async def extrair_extrato(file: UploadFile = File(...)):
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -36,7 +39,6 @@ async def extrair_extrato(file: UploadFile = File(...)):
         return json.loads(response.text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao processar extrato com IA: {str(e)}")
-
 
 @app.post("/transacoes/extrair-ia")
 async def extrair_dados_documento_ia(file: UploadFile = File(...), token: str = Depends(verificar_token)):
