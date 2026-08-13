@@ -13,10 +13,14 @@ import os
 import re
 from database import get_db
 from models import TransacaoModel, AuditoriaModel, UsuarioModel
-
+import json
+from google import genai
+from google.genai import types
 # Correção da declaração da API
 app = FastAPI(title="API SisCuratela Pro - Backend de Produção")
 
+# O SDK puxa automaticamente a variável GEMINI_API_KEY do Render
+client = genai.Client()
 SECRET_KEY = "ChaveSuperSecreta_MudarEmProducao_MPDFT"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
@@ -255,3 +259,72 @@ def extrair_dados_documento_ia(file: UploadFile = File(...)):
     except Exception as e:
         print(f"ERRO CRÍTICO IA: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Falha na Extração: {str(e)}")
+
+@app.post("/api/extrair-extrato")
+async def extrair_recebimentos_extrato(file: UploadFile = File(...)):
+    """
+    Recebe um PDF de extrato bancário, envia para o Gemini 1.5 Flash,
+    e retorna os recebimentos e saldos (Conta Corrente e Aplicações) formatados.
+    """
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="O arquivo deve ser um PDF.")
+
+    # Salva o arquivo temporariamente no servidor
+    temp_path = f"/tmp/{file.filename}"
+    with open(temp_path, "wb") as f:
+        f.write(await file.read())
+
+    arquivo_banco = None
+    
+    try:
+        # 1. Upload seguro para a API do Google (File API)
+        arquivo_banco = client.files.upload(file=temp_path)
+        
+        # 2. O Prompt Especialista
+        prompt = """
+        Você é um assistente financeiro especialista em prestação de contas de curatela.
+        Analise o documento do extrato bancário (Banco do Brasil) em anexo.
+        
+        Sua missão:
+        1. Localize o Saldo Final da Conta Corrente e o Saldo Final Total do Portfólio de Aplicações/Investimentos.
+        2. Extraia TODOS e APENAS os recebimentos (créditos, entradas, transferências recebidas, aposentadorias, aluguéis, rendimentos).
+        3. IGNORE completamente todas as saídas (débitos, pagamentos, tarifas, transferências enviadas, PIX enviados).
+        
+        Retorne ESTRITAMENTE em formato JSON, seguindo exatamente esta estrutura:
+        {
+          "mes_referencia": "MM/AAAA",
+          "saldo_conta_corrente": 0.00,
+          "saldo_aplicacoes": 0.00,
+          "recebimentos": [
+            {
+              "data": "DD/MM/AAAA",
+              "descricao": "NOME OU ORIGEM DO RECEBIMENTO",
+              "valor": 0.00,
+              "classificacao": "Aposentadoria / Renda de Aluguel / Rendimento / Outros"
+            }
+          ]
+        }
+        """
+        
+        # 3. Processamento via Gemini
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=[arquivo_banco, prompt],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.1 
+            )
+        )
+        
+        dados_json = json.loads(response.text)
+        return dados_json
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao processar extrato: {str(e)}")
+        
+    finally:
+        # 4. Limpeza e Segurança
+        if arquivo_banco:
+            client.files.delete(name=arquivo_banco.name) 
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
