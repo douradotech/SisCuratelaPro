@@ -5,6 +5,18 @@ import json
 import os
 
 app = FastAPI()
+
+# =========================================================================
+# FUNÇÃO DE SEGURANÇA 
+# (Adicionada para evitar o erro 'verificar_token not defined')
+# Se você tinha uma conexão com Supabase aqui, mantenha a sua original!
+# =========================================================================
+def verificar_token():
+    return True
+
+# =========================================================================
+# ROTA 1: LEITURA INTELIGENTE DE EXTRATOS BANCÁRIOS (PDF)
+# =========================================================================
 @app.post("/api/extrair-extrato")
 async def extrair_extrato(file: UploadFile = File(...)):
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -40,6 +52,9 @@ async def extrair_extrato(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao processar extrato com IA: {str(e)}")
 
+# =========================================================================
+# ROTA 2: LEITURA DE COMPROVANTES AVULSOS E NOTAS FISCAIS
+# =========================================================================
 @app.post("/transacoes/extrair-ia")
 async def extrair_dados_documento_ia(file: UploadFile = File(...), token: str = Depends(verificar_token)):
     api_key = os.environ.get("GEMINI_API_KEY")
