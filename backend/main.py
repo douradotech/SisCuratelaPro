@@ -10,7 +10,11 @@ import jwt
 import shutil
 import os
 import json
-import google.generativeai as genai
+
+# Import correto do pacote moderno que JÁ ESTÁ no seu servidor
+from google import genai
+from google.genai import types
+
 from database import get_db
 from models import TransacaoModel, AuditoriaModel, UsuarioModel
 
@@ -162,7 +166,7 @@ def anexar_comprovante(id_transacao: str, file: UploadFile = File(...), db: Sess
     return {"status": "sucesso", "mensagem": "Anexado com sucesso", "arquivo": nome_arquivo_seguro}
 
 # =========================================================================
-# ROTAS DE INTELIGÊNCIA ARTIFICIAL (ESTÁVEIS E SEM ERRO V1BETA)
+# ROTAS DE INTELIGÊNCIA ARTIFICIAL (NATIVAS E SEM ERRO V1BETA)
 # =========================================================================
 @app.post("/api/extrair-extrato")
 @app.post("/api/extrair-extrato/")
@@ -171,29 +175,31 @@ async def extrair_extrato(file: UploadFile = File(...)):
     if not api_key:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY não configurada no servidor.")
     
-    genai.configure(api_key=api_key)
     conteudo_bytes = await file.read()
     
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = """
-        Atue como um assistente especialista em direito de família e contabilidade forense, focado em prestação de contas de curatela judicial no Brasil.
-        Analise este extrato financeiro do Banco do Brasil e retorne ESTRITAMENTE um arquivo JSON válido. Não inclua blocos de formatação Markdown como ```json.
-        O JSON DEVE conter APENAS as seguintes chaves:
-        1. 'mes_referencia' (string, ex: 'Agosto/2026')
-        2. 'saldo_conta_corrente' (float)
-        3. 'saldo_aplicacoes' (float)
-        4. 'recebimentos' (lista de objetos, cada um com as chaves 'data', 'descricao', 'valor').
-        Atenção: Ignore totalmente os débitos e saídas. Colete apenas os saldos finais e os recebimentos de entradas autorizadas.
-        """
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=[
+                types.Part.from_bytes(
+                    data=conteudo_bytes,
+                    mime_type="application/pdf",
+                ),
+                (
+                    "Atue como um assistente especialista em direito de família e contabilidade forense, focado em prestação de contas de curatela judicial no Brasil. "
+                    "Analise este extrato financeiro do Banco do Brasil e retorne ESTRITAMENTE um arquivo JSON válido. Não inclua blocos de formatação Markdown como ```json. "
+                    "O JSON DEVE conter APENAS as seguintes chaves: "
+                    "1. 'mes_referencia' (string, ex: 'Agosto/2026') "
+                    "2. 'saldo_conta_corrente' (float) "
+                    "3. 'saldo_aplicacoes' (float) "
+                    "4. 'recebimentos' (lista de objetos, cada um com as chaves 'data', 'descricao', 'valor'). "
+                    "Atenção: Ignore totalmente os débitos e saídas. Colete apenas os saldos finais e os recebimentos de entradas autorizadas."
+                )
+            ]
+        )
         
-        resposta = model.generate_content([
-            prompt,
-            {"mime_type": "application/pdf", "data": conteudo_bytes}
-        ])
-        
-        # Limpador para extrair apenas o JSON e contornar erros de formatação
-        texto_limpo = resposta.text.strip()
+        texto_limpo = response.text.strip()
         if texto_limpo.startswith("```json"):
             texto_limpo = texto_limpo[7:]
         if texto_limpo.startswith("```"):
@@ -212,7 +218,6 @@ async def extrair_dados_documento_ia(file: UploadFile = File(...)):
     if not api_key:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY não configurada no servidor.")
     
-    genai.configure(api_key=api_key)
     conteudo_bytes = await file.read()
     mime_type = file.content_type if file.content_type else "image/jpeg"
     
@@ -220,21 +225,24 @@ async def extrair_dados_documento_ia(file: UploadFile = File(...)):
         mime_type = "image/jpeg"
     
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = """
-        Atue como um assistente especialista em direito de família e contabilidade forense, focado em prestação de contas de curatela judicial no Brasil (MPDFT).
-        Analise esta imagem de comprovante fiscal, nota ou recibo e extraia os dados.
-        Retorne ESTRITAMENTE um arquivo JSON válido. Não inclua blocos de formatação Markdown como ```json.
-        As chaves são: 'valor_sugerido' (string), 'descricao_sugerida' (string justificando a despesa), 'documento_referencia_sugerido' (string), 'estabelecimento_identificado' (string), 'categoria_sugerida' (string).
-        """
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=[
+                types.Part.from_bytes(
+                    data=conteudo_bytes,
+                    mime_type=mime_type,
+                ),
+                (
+                    "Atue como um assistente especialista em direito de família e contabilidade forense, focado em prestação de contas de curatela judicial no Brasil (MPDFT). "
+                    "Analise esta imagem de comprovante fiscal, nota ou recibo e extraia os dados. "
+                    "Retorne ESTRITAMENTE um arquivo JSON válido. Não inclua blocos de formatação Markdown como ```json. "
+                    "As chaves são: 'valor_sugerido' (string), 'descricao_sugerida' (string justificando a despesa), 'documento_referencia_sugerido' (string), 'estabelecimento_identificado' (string), 'categoria_sugerida' (string)."
+                )
+            ]
+        )
         
-        resposta = model.generate_content([
-            prompt,
-            {"mime_type": mime_type, "data": conteudo_bytes}
-        ])
-        
-        # Limpador para extrair apenas o JSON e contornar erros de formatação
-        texto_limpo = resposta.text.strip()
+        texto_limpo = response.text.strip()
         if texto_limpo.startswith("```json"):
             texto_limpo = texto_limpo[7:]
         if texto_limpo.startswith("```"):
