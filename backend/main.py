@@ -178,7 +178,8 @@ async def extrair_extrato(file: UploadFile = File(...)):
     conteudo_bytes = await file.read()
     
     try:
-        client = genai.Client(api_key=api_key)
+        # CORREÇÃO: Trava de segurança ativada para forçar a API v1 estável
+        client = genai.Client(api_key=api_key, http_options={'api_version': 'v1'})
         response = client.models.generate_content(
             model='gemini-1.5-flash',
             contents=[
@@ -225,7 +226,8 @@ async def extrair_dados_documento_ia(file: UploadFile = File(...)):
         mime_type = "image/jpeg"
     
     try:
-        client = genai.Client(api_key=api_key)
+        # CORREÇÃO: Trava de segurança ativada para forçar a API v1 estável
+        client = genai.Client(api_key=api_key, http_options={'api_version': 'v1'})
         response = client.models.generate_content(
             model='gemini-1.5-flash',
             contents=[
