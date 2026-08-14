@@ -66,7 +66,7 @@ async def extrair_extrato(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Erro ao processar extrato com IA: {str(e)}")
 
 # =========================================================================
-# ROTA 2: LEITURA DE COMPROVANTES AVULSOS E NOTAS FISCAIS
+# ROTA 2: LEITURA FORENSE DE COMPROVANTES AVULSOS E NOTAS FISCAIS
 # =========================================================================
 @app.post("/transacoes/extrair-ia")
 @app.post("/transacoes/extrair-ia/")
@@ -79,7 +79,6 @@ async def extrair_dados_documento_ia(file: UploadFile = File(...), token: str = 
     mime_type = file.content_type if file.content_type else "image/jpeg"
     
     try:
-        # Correção: Inicialização limpa permitindo que o SDK resolva o endpoint (v1beta)
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
             model='gemini-1.5-flash',
@@ -89,10 +88,15 @@ async def extrair_dados_documento_ia(file: UploadFile = File(...), token: str = 
                     mime_type=mime_type,
                 ),
                 (
-                    "Você é um assistente financeiro especialista em auditoria. Analise esta imagem de comprovante fiscal/recibo. "
-                    "Extraia os dados solicitados e retorne APENAS um JSON válido com as chaves: "
-                    "'valor_sugerido' (string com ponto ou vírgula), 'descricao_sugerida' (string detalhada), "
-                    "'documento_referencia_sugerido' (string), 'estabelecimento_identificado' (string)."
+                    "Você é um perito em contabilidade forense e direito de família, atuando na prestação de contas de curatela judicial (MPDFT). "
+                    "Analise a imagem deste comprovante (NFC-e, NF-e, recibo, boleto). "
+                    "Sua missão é extrair os dados e estruturá-los com rigor probatório absoluto para auditoria do juízo. "
+                    "Retorne ESTRITAMENTE um objeto JSON válido contendo as seguintes chaves: "
+                    "1. 'valor_sugerido': (string) O valor total exato a ser pago. Ex: '1000,00' ou '337,76'. "
+                    "2. 'descricao_sugerida': (string) Descrição detalhada forense. Liste o tipo de gasto (ex: Alimentos e Limpeza), datas de atendimento ou serviços prestados. É OBRIGATÓRIO incluir o CPF, CNPJ ou registro profissional (ex: CREFITO/CRM) do emitente para lastro legal. É expressamente proibido usar termos genéricos como 'diversos'. "
+                    "3. 'documento_referencia_sugerido': (string) Número da nota, NFC-e, protocolo de autorização ou 'Recibo S/N'. "
+                    "4. 'estabelecimento_identificado': (string) Nome fantasia, razão social ou nome do profissional de saúde. "
+                    "5. 'categoria_mpdft': (string) Classifique a despesa em uma macrocategoria (ex: Despesas com Saúde, Despesas de Subsistência, Manutenção da Habitação, Custos de Gestão)."
                 )
             ],
             config=types.GenerateContentConfig(
@@ -101,4 +105,4 @@ async def extrair_dados_documento_ia(file: UploadFile = File(...), token: str = 
         )
         return json.loads(response.text)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Falha na Extração: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Falha na Extração Forense: {str(e)}")
