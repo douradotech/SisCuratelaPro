@@ -10,9 +10,8 @@ import jwt
 import shutil
 import os
 import json
-
-# BIBLIOTECA CLÁSSICA E ESTÁVEL DA GOOGLE
-import google.generativeai as genai
+import base64
+import requests
 
 from database import get_db
 from models import TransacaoModel, AuditoriaModel, UsuarioModel
@@ -165,7 +164,7 @@ def anexar_comprovante(id_transacao: str, file: UploadFile = File(...), db: Sess
     return {"status": "sucesso", "mensagem": "Anexado com sucesso", "arquivo": nome_arquivo_seguro}
 
 # =========================================================================
-# ROTAS DE INTELIGÊNCIA ARTIFICIAL (NATIVA ESTÁVEL E ABSOLUTA)
+# ROTAS DE INTELIGÊNCIA ARTIFICIAL (CONEXÃO REST DIRETA À PROVA DE FALHAS)
 # =========================================================================
 @app.post("/api/extrair-extrato")
 @app.post("/api/extrair-extrato/")
@@ -174,28 +173,44 @@ async def extrair_extrato(file: UploadFile = File(...)):
     if not api_key:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY não configurada.")
     
-    genai.configure(api_key=api_key)
     conteudo_bytes = await file.read()
+    base64_pdf = base64.b64encode(conteudo_bytes).decode('utf-8')
+    
+    prompt = """
+    Atue como um assistente especialista em direito de família e contabilidade forense, focado em prestação de contas de curatela judicial no Brasil. 
+    Analise este extrato financeiro do Banco do Brasil e retorne ESTRITAMENTE um arquivo JSON válido. Não inclua blocos de formatação Markdown como ```json. 
+    O JSON DEVE conter APENAS as seguintes chaves: 
+    1. 'mes_referencia' (string, ex: 'Agosto/2026') 
+    2. 'saldo_conta_corrente' (float) 
+    3. 'saldo_aplicacoes' (float) 
+    4. 'recebimentos' (lista de objetos, cada um com as chaves 'data', 'descricao', 'valor'). 
+    Atenção: Ignore totalmente os débitos e saídas. Colete apenas os saldos finais e os recebimentos de entradas autorizadas.
+    """
+    
+    # Rota v1 travada manualmente para evitar o bug v1beta da Google
+    url = f"[https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=){api_key}"
+    
+    payload = {
+        "contents": [{
+            "parts": [
+                {"text": prompt},
+                {"inline_data": {"mime_type": "application/pdf", "data": base64_pdf}}
+            ]
+        }],
+        "generationConfig": {"temperature": 0.1}
+    }
+    
+    headers = {'Content-Type': 'application/json'}
     
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = """
-        Atue como um assistente especialista em direito de família e contabilidade forense, focado em prestação de contas de curatela judicial no Brasil. 
-        Analise este extrato financeiro do Banco do Brasil e retorne ESTRITAMENTE um arquivo JSON válido. Não inclua blocos de formatação Markdown como ```json. 
-        O JSON DEVE conter APENAS as seguintes chaves: 
-        1. 'mes_referencia' (string, ex: 'Agosto/2026') 
-        2. 'saldo_conta_corrente' (float) 
-        3. 'saldo_aplicacoes' (float) 
-        4. 'recebimentos' (lista de objetos, cada um com as chaves 'data', 'descricao', 'valor'). 
-        Atenção: Ignore totalmente os débitos e saídas. Colete apenas os saldos finais e os recebimentos de entradas autorizadas.
-        """
+        response = requests.post(url, json=payload, headers=headers)
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail=f"Erro na API do Google: {response.text}")
+            
+        resposta_json = response.json()
+        texto_resposta = resposta_json['candidates'][0]['content']['parts'][0]['text']
         
-        resposta = model.generate_content([
-            prompt,
-            {"mime_type": "application/pdf", "data": conteudo_bytes}
-        ])
-        
-        texto_limpo = resposta.text.strip()
+        texto_limpo = texto_resposta.strip()
         if texto_limpo.startswith("```json"):
             texto_limpo = texto_limpo[7:]
         if texto_limpo.startswith("```"):
@@ -207,6 +222,7 @@ async def extrair_extrato(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao processar extrato com IA: {str(e)}")
 
+
 @app.post("/transacoes/extrair-ia")
 @app.post("/transacoes/extrair-ia/")
 async def extrair_dados_documento_ia(file: UploadFile = File(...)):
@@ -214,28 +230,45 @@ async def extrair_dados_documento_ia(file: UploadFile = File(...)):
     if not api_key:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY não configurada.")
     
-    genai.configure(api_key=api_key)
     conteudo_bytes = await file.read()
     mime_type = file.content_type if file.content_type else "image/jpeg"
     
     if mime_type not in ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"]:
         mime_type = "image/jpeg"
+        
+    base64_img = base64.b64encode(conteudo_bytes).decode('utf-8')
+    
+    prompt = """
+    Atue como um assistente especialista em direito de família e contabilidade forense, focado em prestação de contas de curatela judicial no Brasil (MPDFT). 
+    Analise esta imagem de comprovante fiscal, nota ou recibo e extraia os dados. 
+    Retorne ESTRITAMENTE um arquivo JSON válido. Não inclua blocos de formatação Markdown como ```json. 
+    As chaves são: 'valor_sugerido' (string), 'descricao_sugerida' (string justificando a despesa), 'documento_referencia_sugerido' (string), 'estabelecimento_identificado' (string), 'categoria_sugerida' (string).
+    """
+    
+    # Rota v1 travada manualmente para evitar o bug v1beta da Google
+    url = f"[https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=){api_key}"
+    
+    payload = {
+        "contents": [{
+            "parts": [
+                {"text": prompt},
+                {"inline_data": {"mime_type": mime_type, "data": base64_img}}
+            ]
+        }],
+        "generationConfig": {"temperature": 0.1}
+    }
+    
+    headers = {'Content-Type': 'application/json'}
     
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = """
-        Atue como um assistente especialista em direito de família e contabilidade forense, focado em prestação de contas de curatela judicial no Brasil (MPDFT). 
-        Analise esta imagem de comprovante fiscal, nota ou recibo e extraia os dados. 
-        Retorne ESTRITAMENTE um arquivo JSON válido. Não inclua blocos de formatação Markdown como ```json. 
-        As chaves são: 'valor_sugerido' (string), 'descricao_sugerida' (string justificando a despesa), 'documento_referencia_sugerido' (string), 'estabelecimento_identificado' (string), 'categoria_sugerida' (string).
-        """
+        response = requests.post(url, json=payload, headers=headers)
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail=f"Erro na API do Google: {response.text}")
+            
+        resposta_json = response.json()
+        texto_resposta = resposta_json['candidates'][0]['content']['parts'][0]['text']
         
-        resposta = model.generate_content([
-            prompt,
-            {"mime_type": mime_type, "data": conteudo_bytes}
-        ])
-        
-        texto_limpo = resposta.text.strip()
+        texto_limpo = texto_resposta.strip()
         if texto_limpo.startswith("```json"):
             texto_limpo = texto_limpo[7:]
         if texto_limpo.startswith("```"):
