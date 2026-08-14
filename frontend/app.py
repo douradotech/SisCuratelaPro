@@ -25,6 +25,7 @@ if "logado" not in st.session_state:
         "ocr_desc": "",
         "ocr_ref": "",
         "ocr_estab": "",
+        "ocr_cat": "", # NOVO SENSOR DE CATEGORIA DA IA
         "form_counter": 0
     })
 
@@ -34,7 +35,7 @@ def login_backend(email, senha):
         resposta = requests.post(url_api, json={"email": email, "senha": senha}, timeout=30)
         if resposta.status_code == 200:
             dados = resposta.json()
-            return True, dados["nome"], dados["perfil"], dados["access_token"]
+            return True, dados.get("nome", "Usuário"), dados.get("perfil", "CURADOR"), dados.get("access_token")
         elif resposta.status_code == 401:
             return False, "E-mail ou senha incorretos.", None, None
         else:
@@ -72,7 +73,7 @@ def render_extrato_ia_secao():
         if st.button("Processar Extrato com Inteligência Artificial", type="primary", key="btn_proc_extrato"):
             with st.spinner("Enviando documento para análise segura do Gemini na nuvem..."):
                 try:
-                    # Altere para a URL de produção no Render
+                    # CORREÇÃO DEFINITIVA: Comunicação via rede interna para matar o Erro 405
                     api_url = "http://127.0.0.1:8000/api/extrair-extrato"
                     
                     files = {"file": (arquivo_pdf.name, arquivo_pdf.getvalue(), "application/pdf")}
@@ -143,7 +144,6 @@ else:
     st.sidebar.markdown(f"**Perfil:** `{st.session_state['perfil_usuario']}`")
     st.sidebar.write("---")
 
-    # Menu lateral otimizado com a nova opção de extrato IA
     menu = st.sidebar.radio(
         "Navegação", 
         [
@@ -215,6 +215,7 @@ else:
                                 st.session_state["ocr_desc"] = res_json.get("descricao_sugerida", "")
                                 st.session_state["ocr_ref"] = res_json.get("documento_referencia_sugerido", "")
                                 st.session_state["ocr_estab"] = res_json.get("estabelecimento_identificado", "")
+                                st.session_state["ocr_cat"] = res_json.get("categoria_sugerida", "") # ALIMENTANDO O SENSOR DE CATEGORIA
                                 
                                 counter = st.session_state.get("form_counter", 0)
                                 st.session_state[f"valor_dinamico_{counter}"] = res_json.get("valor_sugerido", "")
@@ -336,7 +337,19 @@ else:
                 "Veterinário / Pet Shop": "micro-veterinario-pet-shop",
                 "Outros Pagamentos": "micro-outros-pagamentos"
             }
-            nome_categoria_selecionada = st.selectbox("Categoria da Despesa (Rubrica Oficial MPDFT)", list(categorias_oficiais.keys()))
+            
+            # INTELIGÊNCIA DE AUTO-SELEÇÃO DE CATEGORIA
+            lista_categorias = list(categorias_oficiais.keys())
+            idx_categoria = 0 # Valor Padrão (Acompanhante)
+            cat_sugerida_ia = st.session_state.get("ocr_cat", "")
+            
+            if cat_sugerida_ia:
+                for i, cat in enumerate(lista_categorias):
+                    if cat.lower() in cat_sugerida_ia.lower() or cat_sugerida_ia.lower() in cat.lower():
+                        idx_categoria = i
+                        break
+            
+            nome_categoria_selecionada = st.selectbox("Categoria da Despesa (Rubrica Oficial MPDFT)", lista_categorias, index=idx_categoria)
             id_micro = categorias_oficiais[nome_categoria_selecionada]
             
             desc_inicial = st.session_state.get("ocr_desc", "")
@@ -402,6 +415,7 @@ else:
                 st.session_state["ocr_desc"] = ""
                 st.session_state["ocr_ref"] = ""
                 st.session_state["ocr_estab"] = ""
+                st.session_state["ocr_cat"] = "" # Limpa a categoria lida para o próximo lançamento
                 st.session_state["form_counter"] += 1
                 st.rerun()
             else:
