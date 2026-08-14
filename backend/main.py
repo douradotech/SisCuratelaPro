@@ -28,8 +28,11 @@ async def login(dados: LoginRequest):
 def verificar_token():
     return True
 
-# 3. ROTA 1: LEITURA INTELIGENTE DE EXTRATOS BANCÁRIOS (PDF)
+# =========================================================================
+# ROTA 1: LEITURA INTELIGENTE DE EXTRATOS BANCÁRIOS (PDF)
+# =========================================================================
 @app.post("/api/extrair-extrato")
+@app.post("/api/extrair-extrato/")
 async def extrair_extrato(file: UploadFile = File(...)):
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
@@ -38,7 +41,8 @@ async def extrair_extrato(file: UploadFile = File(...)):
     conteudo_bytes = await file.read()
     
     try:
-        client = genai.Client(api_key=api_key)
+        # Força o uso da API v1 para evitar o erro 404 do v1beta
+        client = genai.Client(api_key=api_key, http_options={'api_version': 'v1'})
         response = client.models.generate_content(
             model='gemini-1.5-flash',
             contents=[
@@ -64,8 +68,11 @@ async def extrair_extrato(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao processar extrato com IA: {str(e)}")
 
-# 4. ROTA 2: LEITURA DE COMPROVANTES AVULSOS E NOTAS FISCAIS
+# =========================================================================
+# ROTA 2: LEITURA DE COMPROVANTES AVULSOS E NOTAS FISCAIS
+# =========================================================================
 @app.post("/transacoes/extrair-ia")
+@app.post("/transacoes/extrair-ia/")
 async def extrair_dados_documento_ia(file: UploadFile = File(...), token: str = Depends(verificar_token)):
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
@@ -75,7 +82,8 @@ async def extrair_dados_documento_ia(file: UploadFile = File(...), token: str = 
     mime_type = file.content_type if file.content_type else "image/jpeg"
     
     try:
-        client = genai.Client(api_key=api_key)
+        # Força o uso da API v1 para evitar o erro 404 do v1beta
+        client = genai.Client(api_key=api_key, http_options={'api_version': 'v1'})
         response = client.models.generate_content(
             model='gemini-1.5-flash',
             contents=[
