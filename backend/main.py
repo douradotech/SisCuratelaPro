@@ -5,15 +5,12 @@ from google.genai import types
 import json
 import os
 
-# 1. INSTANCIAÇÃO DO FASTAPI (DEVE FICAR NO TOPO)
 app = FastAPI()
 
-# 2. MODELOS E AUTENTICAÇÃO
 class LoginRequest(BaseModel):
     email: str
     senha: str
 
-@app.post("/auth/login")
 @app.post("/auth/login")
 async def login(dados: LoginRequest):
     if dados.email == "allandourado@gmail.com":
@@ -41,8 +38,8 @@ async def extrair_extrato(file: UploadFile = File(...)):
     conteudo_bytes = await file.read()
     
     try:
-        # Força o uso da API v1 para evitar o erro 404 do v1beta
-        client = genai.Client(api_key=api_key, http_options={'api_version': 'v1'})
+        # Correção: Inicialização limpa permitindo que o SDK resolva o endpoint (v1beta)
+        client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
             model='gemini-1.5-flash',
             contents=[
@@ -82,8 +79,8 @@ async def extrair_dados_documento_ia(file: UploadFile = File(...), token: str = 
     mime_type = file.content_type if file.content_type else "image/jpeg"
     
     try:
-        # Força o uso da API v1 para evitar o erro 404 do v1beta
-        client = genai.Client(api_key=api_key, http_options={'api_version': 'v1'})
+        # Correção: Inicialização limpa permitindo que o SDK resolva o endpoint (v1beta)
+        client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
             model='gemini-1.5-flash',
             contents=[

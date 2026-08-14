@@ -1,3 +1,4 @@
+# frontend/app.py
 import streamlit as st
 import requests
 import datetime
@@ -5,15 +6,8 @@ import pandas as pd
 import re
 import time
 
-# Configuração da página otimizada para Desktop e Mobile (Layout Responsivo)
-st.set_page_config(
-    page_title="SisCuratela Pro - Gestão e Compliance",
-    page_icon="⚖️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="SisCuratela Pro - Gestão e Compliance", page_icon="⚖️", layout="wide")
 
-# Inicialização segura do session_state
 if "logado" not in st.session_state:
     st.session_state.update({
         "logado": False,
@@ -29,7 +23,7 @@ if "logado" not in st.session_state:
     })
 
 def login_backend(email, senha):
-    url_api = "http://127.0.0.1:8000/auth/login"
+    url_api = "https://siscuratelapro.onrender.com/auth/login"
     try:
         resposta = requests.post(url_api, json={"email": email, "senha": senha}, timeout=30)
         if resposta.status_code == 200:
@@ -45,7 +39,7 @@ def login_backend(email, senha):
         return False, "Erro Crítico: Backend desligado.", None, None
 
 def enviar_lancamento(dados_transacao, token):
-    url_api = "http://127.0.0.1:8000/transacoes/novo"
+    url_api = "https://siscuratelapro.onrender.com/transacoes/novo"
     headers = {"Authorization": f"Bearer {token}"}
     try:
         resposta = requests.post(url_api, json=dados_transacao, headers=headers)
@@ -57,54 +51,6 @@ def enviar_lancamento(dados_transacao, token):
             return False, erro_detalhe, None
     except requests.exceptions.ConnectionError:
         return False, "Falha de conexão com o Backend.", None
-
-# ==========================================
-# SEÇÃO DA IA: LEITURA INTELIGENTE DE EXTRATOS
-# ==========================================
-def render_extrato_ia_secao():
-    st.title("🤖 Leitura Inteligente de Extratos Bancários")
-    st.markdown("Faça o upload do extrato em PDF do **Banco do Brasil** para extração automática dos saldos e recebimentos oficiais.")
-    st.write("---")
-
-    arquivo_pdf = st.file_uploader("Selecione o arquivo PDF do extrato bancário", type=["pdf"], key="uploader_extrato_pdf")
-
-    if arquivo_pdf is not None:
-        if st.button("Processar Extrato com Inteligência Artificial", type="primary", key="btn_proc_extrato"):
-            with st.spinner("Enviando documento para análise segura do Gemini na nuvem..."):
-                try:
-                    # Altere para a URL de produção no Render
-                    api_url = "http://127.0.0.1:8000/api/extrair-extrato"
-                    
-                    files = {"file": (arquivo_pdf.name, arquivo_pdf.getvalue(), "application/pdf")}
-                    response = requests.post(api_url, files=files, timeout=60)
-                    
-                    if response.status_code == 200:
-                        resultado = response.json()
-                        st.success("Extrato processado com sucesso!")
-                        
-                        st.markdown("### 📊 Resumo Financeiro Identificado")
-                        col1, col2, col3 = st.columns(3)
-                        col1.metric("Mês de Referência", resultado.get("mes_referencia", "N/D"))
-                        
-                        saldo_cc = resultado.get("saldo_conta_corrente", 0.0)
-                        col2.metric("Saldo Conta Corrente", f"R$ {saldo_cc:,.2f}")
-                        
-                        saldo_app = resultado.get("saldo_aplicacoes", 0.0)
-                        col3.metric("Saldo Aplicações", f"R$ {saldo_app:,.2f}")
-                        
-                        st.markdown("### 📥 Entradas Identificadas (Aposentadorias, Aluguéis e Rendimentos)")
-                        recebimentos = resultado.get("recebimentos", [])
-                        
-                        if recebimentos:
-                            st.dataframe(recebimentos, use_container_width=True)
-                        else:
-                            st.info("Nenhum recebimento foi catalogado neste extrato específico.")
-                            
-                    else:
-                        st.error(f"Erro no servidor (Código {response.status_code}): {response.text}")
-                        
-                except Exception as e:
-                    st.error(f"Falha de comunicação com o backend: {str(e)}")
 
 # ==========================================
 # TELA DE LOGIN SEGURA
@@ -135,7 +81,7 @@ if not st.session_state["logado"]:
                     st.error(f"Falha na autenticação: {nome_ou_erro}")
 
 # ==========================================
-# PAINEL LOGADO (ENTERPRISE & MOBILE FRIENDLY)
+# PAINEL LOGADO (ENTERPRISE)
 # ==========================================
 else:
     st.sidebar.title("Painel de Controle")
@@ -143,16 +89,7 @@ else:
     st.sidebar.markdown(f"**Perfil:** `{st.session_state['perfil_usuario']}`")
     st.sidebar.write("---")
 
-    # Menu lateral otimizado com a nova opção de extrato IA
-    menu = st.sidebar.radio(
-        "Navegação", 
-        [
-            "Painel Central", 
-            "Novo Lançamento Financeiro", 
-            "Extratos IA (Banco do Brasil)", 
-            "Extratos e Relatórios"
-        ]
-    )
+    menu = st.sidebar.radio("Navegação", ["Painel Central", "Novo Lançamento Financeiro", "Extratos e Relatórios"])
 
     if st.sidebar.button("Encerrar Sessão (Logout)"):
         st.session_state.clear()
@@ -161,10 +98,7 @@ else:
     if menu == "Painel Central":
         st.title("📊 Painel Executivo e Compliance")
         st.success("Conexão estabelecida com segurança entre Frontend, Backend e PostgreSQL!")
-        st.info("Utilize o menu lateral para registrar transações financeiras e auditar extratos para a prestação de contas.")
-
-    elif menu == "Extratos IA (Banco do Brasil)":
-        render_extrato_ia_secao()
+        st.info("Utilize o menu lateral para registrar transações financeiras com validação automática para a prestação de contas.")
 
     elif menu == "Novo Lançamento Financeiro":
         st.title("💰 Novo Lançamento Financeiro e Leitura Inteligente (OCR/IA)")
@@ -196,9 +130,9 @@ else:
                 st.markdown("Posicione o documento em frente à câmera do seu dispositivo e clique em tirar foto:")
                 arquivo_capturado = st.camera_input("Tirar Foto do Comprovante", key="camera_ia_novo")
             
-            st.write("") 
+            st.write("") # Espaçamento
+            
             if st.button("🚀 Processar Documento com IA", type="primary", key="btn_executar_ia"):
-                
                 if arquivo_capturado is None:
                     st.warning("⚠️ Atenção: Selecione um arquivo ou tire uma foto ANTES de clicar em processar.")
                 else:
@@ -207,7 +141,8 @@ else:
                             headers = {"Authorization": f"Bearer {st.session_state.get('token', '')}"}
                             files = {"file": (getattr(arquivo_capturado, 'name', 'foto_camera.jpg'), arquivo_capturado.getvalue(), getattr(arquivo_capturado, 'type', 'image/jpeg'))}
                             
-                            resp_ocr = requests.post("http://127.0.0.1:8000/transacoes/extrair-ia", files=files, headers=headers, timeout=60)
+                            resp_ocr = requests.post("https://siscuratelapro.onrender.com/transacoes/extrair-ia", files=files, headers=headers, timeout=60)
+                            
                             if resp_ocr.status_code == 200:
                                 res_json = resp_ocr.json()
                                 
@@ -342,6 +277,8 @@ else:
             desc_inicial = st.session_state.get("ocr_desc", "")
             descricao = st.text_area("Descrição Detalhada do Gasto (Proibido termos genéricos como 'diversos')", value=desc_inicial)
             
+            comprovante_file = st.file_uploader("Anexar Comprovante Fiscal Definitivo (Opcional)", type=["pdf", "png", "jpg", "jpeg"])
+            
             submit_transacao = st.form_submit_button("Validar e Salvar Lançamento")
 
         if submit_transacao:
@@ -381,7 +318,7 @@ else:
 
             sucesso_transacao, msg, id_gerado = enviar_lancamento(payload, st.session_state["token"])
             if sucesso_transacao:
-                arquivo_para_anexar = arquivo_capturado
+                arquivo_para_anexar = comprovante_file if comprovante_file is not None else arquivo_capturado
                 
                 if arquivo_para_anexar is not None:
                     nome_arq = getattr(arquivo_para_anexar, 'name', 'foto_camera.jpg')
@@ -390,11 +327,11 @@ else:
                     
                     files = {"file": (nome_arq, bytes_arq, tipo_arq)}
                     headers = {"Authorization": f"Bearer {st.session_state['token']}"}
-                    resp_upload = requests.post(f"http://127.0.0.1:8000/transacoes/{id_gerado}/anexar", files=files, headers=headers)
+                    resp_upload = requests.post(f"https://siscuratelapro.onrender.com/transacoes/{id_gerado}/anexar", files=files, headers=headers)
                     if resp_upload.status_code == 200:
                         st.session_state["msg_sucesso"] = "✅ Lançamento gravado e Comprovante anexado com sucesso!"
                     else:
-                        st.session_state["msg_sucesso"] = "⚠️ Lançamento gravado, mas falha ao enviar comprovante físico."
+                        st.session_state["msg_sucesso"] = f"⚠️ Lançamento gravado, mas falha ao enviar comprovante físico."
                 else:
                     st.session_state["msg_sucesso"] = f"✅ {msg}"
                 
@@ -414,7 +351,7 @@ else:
 
         try:
             headers = {"Authorization": f"Bearer {st.session_state['token']}"}
-            resposta = requests.get("http://127.0.0.1:8000/transacoes/listar", headers=headers, timeout=10)
+            resposta = requests.get("https://siscuratelapro.onrender.com/transacoes/listar", headers=headers, timeout=10)
             
             if resposta.status_code == 200:
                 lista_transacoes = resposta.json()
@@ -506,7 +443,7 @@ else:
                                 transacao_selecionada = st.selectbox("Selecione o comprovante:", list(opcoes_comprovantes.keys()))
                                 id_selec = opcoes_comprovantes[transacao_selecionada]
                                 
-                                resp_file = requests.get(f"http://127.0.0.1:8000/transacoes/{id_selec}/comprovante", headers=headers)
+                                resp_file = requests.get(f"https://siscuratelapro.onrender.com/transacoes/{id_selec}/comprovante", headers=headers)
                                 if resp_file.status_code == 200:
                                     st.download_button(label="💾 Baixar PDF/Imagem", data=resp_file.content, file_name=f"comprovante_{id_selec}.jpg", mime=resp_file.headers.get('Content-Type'))
                                 else:
