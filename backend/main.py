@@ -14,12 +14,14 @@ class LoginRequest(BaseModel):
     senha: str
 
 @app.post("/auth/login")
+@app.post("/auth/login")
 async def login(dados: LoginRequest):
     if dados.email == "allandourado@gmail.com":
         return {
             "access_token": "token_seguro_siscuratela_pro",
             "token_type": "bearer",
-            "usuario": "Allan Dourado"
+            "nome": "Allan Dourado",
+            "perfil": "CURADOR_ADMIN"
         }
     raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
