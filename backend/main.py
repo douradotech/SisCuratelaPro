@@ -12,6 +12,7 @@ import os
 import json
 import base64
 import requests
+import re
 
 from database import get_db
 from models import TransacaoModel, AuditoriaModel, UsuarioModel
@@ -164,14 +165,17 @@ def anexar_comprovante(id_transacao: str, file: UploadFile = File(...), db: Sess
     return {"status": "sucesso", "mensagem": "Anexado com sucesso", "arquivo": nome_arquivo_seguro}
 
 # =========================================================================
-# ROTAS DE INTELIGÊNCIA ARTIFICIAL (CONEXÃO REST DIRETA À PROVA DE FALHAS)
+# ROTAS DE INTELIGÊNCIA ARTIFICIAL (CONEXÃO REST BLINDADA)
 # =========================================================================
 @app.post("/api/extrair-extrato")
 @app.post("/api/extrair-extrato/")
 async def extrair_extrato(file: UploadFile = File(...)):
-    api_key = os.environ.get("GEMINI_API_KEY")
+    raw_key = os.environ.get("GEMINI_API_KEY", "")
+    # Filtro absoluto: mantém APENAS letras, números, traços e underscores. Destrói aspas, enters e espaços ocultos.
+    api_key = re.sub(r'[^a-zA-Z0-9_\-]', '', raw_key)
+    
     if not api_key:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY não configurada.")
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY ausente ou inválida no Render.")
     
     conteudo_bytes = await file.read()
     base64_pdf = base64.b64encode(conteudo_bytes).decode('utf-8')
@@ -187,8 +191,9 @@ async def extrair_extrato(file: UploadFile = File(...)):
     Atenção: Ignore totalmente os débitos e saídas. Colete apenas os saldos finais e os recebimentos de entradas autorizadas.
     """
     
-    # Rota v1 travada manualmente para evitar o bug v1beta da Google
-    url = f"[https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=){api_key}"
+    url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=){api_key}"
+    # Conversão extrema para ASCII puro para esmagar qualquer caractere Unicode invisível
+    url = url.encode('ascii', 'ignore').decode('ascii').strip()
     
     payload = {
         "contents": [{
@@ -226,9 +231,12 @@ async def extrair_extrato(file: UploadFile = File(...)):
 @app.post("/transacoes/extrair-ia")
 @app.post("/transacoes/extrair-ia/")
 async def extrair_dados_documento_ia(file: UploadFile = File(...)):
-    api_key = os.environ.get("GEMINI_API_KEY")
+    raw_key = os.environ.get("GEMINI_API_KEY", "")
+    # Filtro absoluto: mantém APENAS letras, números, traços e underscores. Destrói aspas, enters e espaços ocultos.
+    api_key = re.sub(r'[^a-zA-Z0-9_\-]', '', raw_key)
+    
     if not api_key:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY não configurada.")
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY ausente ou inválida no Render.")
     
     conteudo_bytes = await file.read()
     mime_type = file.content_type if file.content_type else "image/jpeg"
@@ -245,8 +253,9 @@ async def extrair_dados_documento_ia(file: UploadFile = File(...)):
     As chaves são: 'valor_sugerido' (string), 'descricao_sugerida' (string justificando a despesa), 'documento_referencia_sugerido' (string), 'estabelecimento_identificado' (string), 'categoria_sugerida' (string).
     """
     
-    # Rota v1 travada manualmente para evitar o bug v1beta da Google
-    url = f"[https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=){api_key}"
+    url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=){api_key}"
+    # Conversão extrema para ASCII puro para esmagar qualquer caractere Unicode invisível
+    url = url.encode('ascii', 'ignore').decode('ascii').strip()
     
     payload = {
         "contents": [{
