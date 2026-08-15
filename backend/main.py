@@ -10,11 +10,8 @@ import jwt
 import shutil
 import os
 import json
-import re
-
-# Importação oficial e moderna da Google
-from google import genai
-from google.genai import types
+import base64
+import requests
 
 from database import get_db
 from models import TransacaoModel, AuditoriaModel, UsuarioModel
@@ -132,7 +129,7 @@ def registrar_nova_transacao(dados: LancamentoRequest, db: Session = Depends(get
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao gravar transação: {str(e)}")
-    return {"status": "sucesso", "mensagem": "Lançamento financeiro gravado com sucesso no banco de dados.", "id_transacao": nova_transacao.id_transacao}
+    return {"status": "sucesso", "mensagem": "Lançamento gravado com sucesso.", "id_transacao": nova_transacao.id_transacao}
 
 @app.get("/transacoes/listar")
 def listar_transacoes(db: Session = Depends(get_db), usuario_id_autenticado: str = Depends(obter_usuario_atual)):
@@ -166,96 +163,108 @@ def anexar_comprovante(id_transacao: str, file: UploadFile = File(...), db: Sess
         raise HTTPException(status_code=500, detail=f"Erro ao salvar arquivo: {str(e)}")
     return {"status": "sucesso", "mensagem": "Anexado com sucesso", "arquivo": nome_arquivo_seguro}
 
+
 # =========================================================================
-# ROTAS DE INTELIGÊNCIA ARTIFICIAL (SDK GOOGLE-GENAI CORRIGIDO)
+# ROTAS DE INTELIGÊNCIA ARTIFICIAL (REST API DIRETA - À PROVA DE FALHAS)
 # =========================================================================
 @app.post("/api/extrair-extrato")
 @app.post("/api/extrair-extrato/")
 async def extrair_extrato(file: UploadFile = File(...)):
-    # Mantém a chave intacta (aceitando o ponto das chaves AQ...) e apenas remove espaços/enters
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    
     if not api_key:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY ausente ou inválida no Render.")
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY ausente no Render.")
     
     conteudo_bytes = await file.read()
+    base64_pdf = base64.b64encode(conteudo_bytes).decode('utf-8')
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    
+    prompt = """
+    Atue como um assistente especialista em direito de família e contabilidade forense, focado em prestação de contas de curatela judicial no Brasil. 
+    Analise este extrato financeiro do Banco do Brasil e retorne ESTRITAMENTE um arquivo JSON válido. Não inclua blocos de formatação Markdown como ```json. 
+    O JSON DEVE conter APENAS as seguintes chaves: 
+    1. 'mes_referencia' (string) 
+    2. 'saldo_conta_corrente' (float) 
+    3. 'saldo_aplicacoes' (float) 
+    4. 'recebimentos' (lista de objetos com 'data', 'descricao', 'valor'). 
+    Colete apenas os saldos finais e os recebimentos autorizados.
+    """
+    
+    payload = {
+        "contents": [{
+            "parts": [
+                {"text": prompt},
+                {"inline_data": {"mime_type": "application/pdf", "data": base64_pdf}}
+            ]
+        }],
+        "generationConfig": {"temperature": 0.1}
+    }
     
     try:
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=[
-                types.Part.from_bytes(
-                    data=conteudo_bytes,
-                    mime_type="application/pdf",
-                ),
-                (
-                    "Atue como um assistente especialista em direito de família e contabilidade forense, focado em prestação de contas de curatela judicial no Brasil. "
-                    "Analise este extrato financeiro do Banco do Brasil e retorne ESTRITAMENTE um arquivo JSON válido. Não inclua blocos de formatação Markdown como ```json. "
-                    "O JSON DEVE conter APENAS as seguintes chaves: "
-                    "1. 'mes_referencia' (string, ex: 'Agosto/2026') "
-                    "2. 'saldo_conta_corrente' (float) "
-                    "3. 'saldo_aplicacoes' (float) "
-                    "4. 'recebimentos' (lista de objetos, cada um com as chaves 'data', 'descricao', 'valor'). "
-                    "Atenção: Ignore totalmente os débitos e saídas. Colete apenas os saldos finais e os recebimentos de entradas autorizadas."
-                )
-            ]
-        )
-        
-        texto_limpo = response.text.strip()
-        if texto_limpo.startswith("```json"):
-            texto_limpo = texto_limpo[7:]
-        if texto_limpo.startswith("```"):
-            texto_limpo = texto_limpo[3:]
-        if texto_limpo.endswith("```"):
-            texto_limpo = texto_limpo[:-3]
+        response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail=f"Erro da API Google: {response.text}")
             
-        return json.loads(texto_limpo.strip())
+        texto_resposta = response.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        
+        if texto_resposta.startswith("```json"):
+            texto_resposta = texto_resposta[7:]
+        if texto_resposta.startswith("```"):
+            texto_resposta = texto_resposta[3:]
+        if texto_resposta.endswith("```"):
+            texto_resposta = texto_resposta[:-3]
+            
+        return json.loads(texto_resposta.strip())
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao processar extrato com IA: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro no processamento: {str(e)}")
 
 
 @app.post("/transacoes/extrair-ia")
 @app.post("/transacoes/extrair-ia/")
 async def extrair_dados_documento_ia(file: UploadFile = File(...)):
-    # Mantém a chave intacta (aceitando o ponto das chaves AQ...) e apenas remove espaços/enters
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    
     if not api_key:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY ausente ou inválida no Render.")
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY ausente no Render.")
     
     conteudo_bytes = await file.read()
     mime_type = file.content_type if file.content_type else "image/jpeg"
-    
-    if mime_type not in ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"]:
+    if mime_type not in ["image/jpeg", "image/png", "image/webp", "application/pdf"]:
         mime_type = "image/jpeg"
+        
+    base64_img = base64.b64encode(conteudo_bytes).decode('utf-8')
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    
+    prompt = """
+    Atue como um assistente especialista em direito de família e contabilidade forense, focado em prestação de contas de curatela judicial (MPDFT). 
+    Analise esta imagem e extraia os dados ESTRITAMENTE em um arquivo JSON válido. Não inclua blocos Markdown como ```json. 
+    As chaves são: 'valor_sugerido' (string), 'descricao_sugerida' (string), 'documento_referencia_sugerido' (string), 'estabelecimento_identificado' (string), 'categoria_sugerida' (string).
+    """
+    
+    payload = {
+        "contents": [{
+            "parts": [
+                {"text": prompt},
+                {"inline_data": {"mime_type": mime_type, "data": base64_img}}
+            ]
+        }],
+        "generationConfig": {"temperature": 0.1}
+    }
     
     try:
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=[
-                types.Part.from_bytes(
-                    data=conteudo_bytes,
-                    mime_type=mime_type,
-                ),
-                (
-                    "Atue como um assistente especialista em direito de família e contabilidade forense, focado em prestação de contas de curatela judicial no Brasil (MPDFT). "
-                    "Analise esta imagem de comprovante fiscal, nota ou recibo e extraia os dados. "
-                    "Retorne ESTRITAMENTE um arquivo JSON válido. Não inclua blocos de formatação Markdown como ```json. "
-                    "As chaves são: 'valor_sugerido' (string), 'descricao_sugerida' (string justificando a despesa), 'documento_referencia_sugerido' (string), 'estabelecimento_identificado' (string), 'categoria_sugerida' (string)."
-                )
-            ]
-        )
-        
-        texto_limpo = response.text.strip()
-        if texto_limpo.startswith("```json"):
-            texto_limpo = texto_limpo[7:]
-        if texto_limpo.startswith("```"):
-            texto_limpo = texto_limpo[3:]
-        if texto_limpo.endswith("```"):
-            texto_limpo = texto_limpo[:-3]
+        response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail=f"Erro da API Google: {response.text}")
             
-        return json.loads(texto_limpo.strip())
+        texto_resposta = response.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        
+        if texto_resposta.startswith("```json"):
+            texto_resposta = texto_resposta[7:]
+        if texto_resposta.startswith("```"):
+            texto_resposta = texto_resposta[3:]
+        if texto_resposta.endswith("```"):
+            texto_resposta = texto_resposta[:-3]
+            
+        return json.loads(texto_resposta.strip())
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Falha na Extração Forense: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Falha na Extração: {str(e)}")
