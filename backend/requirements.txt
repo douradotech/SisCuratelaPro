@@ -9,4 +9,4 @@ python-multipart
 streamlit
 requests
 pandas
-google-generativeai
+google-genai
