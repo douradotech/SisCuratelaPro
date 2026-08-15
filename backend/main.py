@@ -167,13 +167,13 @@ def anexar_comprovante(id_transacao: str, file: UploadFile = File(...), db: Sess
     return {"status": "sucesso", "mensagem": "Anexado com sucesso", "arquivo": nome_arquivo_seguro}
 
 # =========================================================================
-# ROTAS DE INTELIGÊNCIA ARTIFICIAL (SDK GOOGLE-GENAI COM SANITIZAÇÃO)
+# ROTAS DE INTELIGÊNCIA ARTIFICIAL (SDK GOOGLE-GENAI CORRIGIDO)
 # =========================================================================
 @app.post("/api/extrair-extrato")
 @app.post("/api/extrair-extrato/")
 async def extrair_extrato(file: UploadFile = File(...)):
-    raw_key = os.environ.get("GEMINI_API_KEY", "")
-    api_key = re.sub(r'[^a-zA-Z0-9_\-]', '', raw_key)
+    # Mantém a chave intacta (aceitando o ponto das chaves AQ...) e apenas remove espaços/enters
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     
     if not api_key:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY ausente ou inválida no Render.")
@@ -181,7 +181,6 @@ async def extrair_extrato(file: UploadFile = File(...)):
     conteudo_bytes = await file.read()
     
     try:
-        # Inicialização protegida contra caracteres ocultos
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
             model='gemini-1.5-flash',
@@ -219,8 +218,8 @@ async def extrair_extrato(file: UploadFile = File(...)):
 @app.post("/transacoes/extrair-ia")
 @app.post("/transacoes/extrair-ia/")
 async def extrair_dados_documento_ia(file: UploadFile = File(...)):
-    raw_key = os.environ.get("GEMINI_API_KEY", "")
-    api_key = re.sub(r'[^a-zA-Z0-9_\-]', '', raw_key)
+    # Mantém a chave intacta (aceitando o ponto das chaves AQ...) e apenas remove espaços/enters
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     
     if not api_key:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY ausente ou inválida no Render.")
@@ -232,7 +231,6 @@ async def extrair_dados_documento_ia(file: UploadFile = File(...)):
         mime_type = "image/jpeg"
     
     try:
-        # Inicialização protegida contra caracteres ocultos
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
             model='gemini-1.5-flash',
