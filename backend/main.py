@@ -109,6 +109,32 @@ def login_oficial(request: LoginRequest, db: Session = Depends(get_db)):
         "access_token": access_token
     }
 
+# --- ROTA DE CRIAÇÃO DO PRIMEIRO USUÁRIO (EXECUTE APENAS UMA VEZ) ---
+@app.get("/setup-inicial")
+def setup_inicial(db: Session = Depends(get_db)):
+    email_admin = "allandourado@gmail.com"
+    usuario_existente = db.query(UsuarioModel).filter(UsuarioModel.email == email_admin).first()
+    
+    if usuario_existente:
+        return {"status": "Usuário já existe. Vá para a tela de login."}
+
+    novo_usuario = UsuarioModel(
+        id_usuario=str(uuid.uuid4()),
+        nome="Allan Dourado",
+        email=email_admin,
+        senha_hash=gerar_hash("Curatela@2026"), # Senha inicial segura
+        perfil="CURADOR_ADMIN"
+    )
+    
+    try:
+        db.add(novo_usuario)
+        db.commit()
+        return {"status": "Sucesso", "mensagem": "Usuário Administrador criado! Senha temporária: Curatela@2026"}
+    except Exception as e:
+        db.rollback()
+        return {"status": "Erro", "detalhe": str(e)}
+# -------------------------------------------------------------------
+
 @app.post("/transacoes/novo")
 def registrar_nova_transacao(dados: LancamentoRequest, db: Session = Depends(get_db), usuario_id_autenticado: str = Depends(obter_usuario_atual)):
     nova_transacao = TransacaoModel(
@@ -165,7 +191,7 @@ def anexar_comprovante(id_transacao: str, file: UploadFile = File(...), db: Sess
 
 
 # =========================================================================
-# ROTAS DE INTELIGÊNCIA ARTIFICIAL (REST API DIRETA - À PROVA DE FALHAS)
+# ROTAS DE INTELIGÊNCIA ARTIFICIAL (REST API DIRETA)
 # =========================================================================
 @app.post("/api/extrair-extrato")
 @app.post("/api/extrair-extrato/")
